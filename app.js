@@ -218,6 +218,16 @@ function filterGallery(){
 }
 
 function openAdminLogin(){document.querySelector("#adminCodeInput").value="";document.querySelector("#adminLoginDialog").showModal();setTimeout(()=>document.querySelector("#adminCodeInput").focus(),50);}
+
+function bindDialogUtilities(){
+  ["feedbackDialog","adminLoginDialog","manageCodeDialog"].forEach(id=>{
+    const dialog=document.getElementById(id);
+    if(!dialog || dialog.dataset.bound) return;
+    dialog.dataset.bound="1";
+    dialog.addEventListener("click",e=>{ if(e.target===dialog) dialog.close(); });
+  });
+}
+
 function openManageCode(id,action){
   document.querySelector("#manageTargetId").value=id; document.querySelector("#manageAction").value=action; document.querySelector("#manageCodeInput").value="";
   document.querySelector("#manageDialogTitle").textContent=action==="edit"?"작품 수정 권한 확인":"작품 삭제 권한 확인";
@@ -250,4 +260,5 @@ document.querySelector("#manageCodeForm").addEventListener("submit",e=>{
 });
 
 document.querySelector(".brand").onclick=()=>setRoute("home");
+bindDialogUtilities();
 render();
