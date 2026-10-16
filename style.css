@@ -240,3 +240,87 @@ textarea{min-height:110px;resize:vertical}
 
 .dialog-close:hover{background:#e9eaf5}
 .dialog .small{text-align:center;line-height:1.6;margin-top:-4px}
+
+
+/* ===== 최종 헤더/푸터 정리 ===== */
+.topbar{
+  padding:12px 24px;
+}
+.brand{
+  gap:12px;
+}
+.brand-logo{
+  width:230px;
+  max-width:38vw;
+  height:auto;
+  display:block;
+}
+.main-nav{
+  gap:4px;
+}
+.nav-btn.teacher{display:none!important;}
+
+.feedback-guide{
+  margin:-6px 0 0;
+  text-align:center;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.6;
+}
+
+.site-footer{
+  margin-top:54px;
+  border-top:1px solid var(--line);
+  background:linear-gradient(180deg,#ffffff 0%,#f7fbfb 100%);
+}
+.footer-inner{
+  max-width:1180px;
+  margin:0 auto;
+  padding:28px 24px 26px;
+  text-align:center;
+  position:relative;
+}
+.footer-inner p{
+  margin:0;
+  font-size:15px;
+  font-weight:800;
+  color:#365b59;
+}
+.footer-admin-btn{
+  position:absolute;
+  right:24px;
+  top:50%;
+  transform:translateY(-50%);
+  width:38px;
+  height:38px;
+  border:0;
+  border-radius:12px;
+  display:grid;
+  place-items:center;
+  background:transparent;
+  color:#9ca3af;
+  font-size:20px;
+  transition:.18s ease;
+}
+.footer-admin-btn:hover{
+  background:#eef2f7;
+  color:var(--brand);
+  transform:translateY(-50%) rotate(12deg);
+}
+.footer-admin-btn:focus-visible{
+  outline:3px solid rgba(91,91,214,.18);
+  outline-offset:2px;
+}
+
+@media (max-width:700px){
+  .brand-logo{
+    width:180px;
+    max-width:58vw;
+  }
+  .footer-inner{
+    padding:26px 58px 26px 18px;
+  }
+  .footer-admin-btn{
+    right:14px;
+  }
+}

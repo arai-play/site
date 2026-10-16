@@ -19,7 +19,6 @@
       <button class="nav-btn" data-route="popular">인기작</button>
       <button class="nav-btn" data-route="ranking">랭킹</button>
       <button class="nav-btn" data-route="submit">작품 등록</button>
-      <button class="nav-btn teacher" data-route="admin">교사 관리</button>
     </nav>
   </header>
 
@@ -34,6 +33,7 @@
         <img src="arai-mascot.png" alt="아라 AI PLAY 대표 캐릭터" class="feedback-mascot" />
       </div>
       <h3>친구에게 피드백 남기기</h3>
+      <p class="feedback-guide">친구의 작품이 더 좋아질 수 있도록 따뜻한 말을 남겨주세요 💜</p>
       <form class="dialog-form" id="feedbackForm">
         <input type="hidden" id="feedbackAppId" />
         <label>
@@ -82,6 +82,16 @@
       </form>
     </div>
   </dialog>
+
+
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <p>건강한 AI 활용, 행복한 학교 생활을 응원합니다!</p>
+      <button class="footer-admin-btn" id="footerAdminButton" aria-label="교사 관리" title="교사 관리">
+        ⚙️
+      </button>
+    </div>
+  </footer>
 
   <script src="app.js"></script>
 </body>

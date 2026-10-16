@@ -260,5 +260,15 @@ document.querySelector("#manageCodeForm").addEventListener("submit",e=>{
 });
 
 document.querySelector(".brand").onclick=()=>setRoute("home");
+const footerAdminButton=document.querySelector("#footerAdminButton");
+if(footerAdminButton){
+  footerAdminButton.addEventListener("click",()=>{
+    if(isAdmin()){
+      setRoute("admin");
+    }else{
+      openAdminLogin();
+    }
+  });
+}
 bindDialogUtilities();
 render();
