@@ -375,3 +375,13 @@ textarea{min-height:110px;resize:vertical}
   font-size:13px;
   font-weight:800;
 }
+
+.firestore-note{
+  margin:0 0 16px;
+  padding:10px 14px;
+  border-radius:14px;
+  background:#ecfdf5;
+  color:#047857;
+  font-size:13px;
+  font-weight:800;
+}

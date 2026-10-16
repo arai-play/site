@@ -13,6 +13,7 @@ const ADMIN_EMAILS = ["sirgom777@gmail.com"];
 
 firebase.initializeApp(FIREBASE_CONFIG);
 const firebaseAuth = firebase.auth();
+const firestoreDb = firebase.firestore();
 const googleProvider = new firebase.auth.GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
@@ -88,26 +89,56 @@ const seedApps = [
   {id:"pending1", title:"날씨 옷차림 도우미", category:"생활", grade:"4학년", author:"구름빵", description:"날씨를 선택하면 알맞은 옷차림을 알려주는 앱", story:"아침마다 어떤 옷을 입을지 고민해서 만들었습니다.", aiUse:"조건에 맞는 안내 문구를 만드는 데 AI를 활용했습니다.", url:"https://example.com", image:"", emoji:"🌦️", createdAt:"2026-10-16", views:0, likes:0, approved:false, managementCode:"1234", reactions:{"재미있어요":0,"아이디어 좋아요":0,"배움이 있어요":0}, feedback:[]}
 ];
 
-let state = loadState();
+let state = { apps: [] };
+let appsUnsubscribe = null;
 let currentRoute = "home";
 let categoryFilter = "전체";
 let detailId = null;
 let editingId = null;
 let currentGalleryType = "new";
 
-function loadState(){
-  try{
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if(saved?.apps){
-      saved.apps = saved.apps.map(a=>({...a, managementCode:a.managementCode||"1234"}));
-      return saved;
-    }
-  }catch(e){}
-  const initial = { apps: structuredClone(seedApps) };
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
-  return initial;
+function saveState(){ /* Firestore가 공동 저장소이므로 localStorage 저장은 사용하지 않습니다. */ }
+
+function normalizeApp(doc){
+  const data=doc.data();
+  return {
+    id:doc.id,
+    title:data.title||"",
+    category:data.category||"기타",
+    grade:data.grade||"",
+    author:data.author||"",
+    description:data.description||"",
+    story:data.story||"",
+    aiUse:data.aiUse||"",
+    url:data.url||"",
+    image:data.image||"",
+    emoji:data.emoji||categoryEmoji(data.category),
+    createdAt:data.createdAt||"",
+    views:Number(data.views||0),
+    likes:Number(data.likes||0),
+    approved:data.approved===true,
+    reactions:data.reactions||{"재미있어요":0,"아이디어 좋아요":0,"배움이 있어요":0},
+    feedback:Array.isArray(data.feedback)?data.feedback:[]
+  };
 }
-function saveState(){localStorage.setItem(STORAGE_KEY, JSON.stringify(state));}
+
+function startAppsListener(){
+  if(appsUnsubscribe){
+    appsUnsubscribe();
+    appsUnsubscribe=null;
+  }
+  let query=firestoreDb.collection("apps");
+  if(!isAdmin()){
+    query=query.where("approved","==",true);
+  }
+  appsUnsubscribe=query.onSnapshot(snapshot=>{
+    state.apps=snapshot.docs.map(normalizeApp);
+    render();
+  },error=>{
+    console.error("Firestore 읽기 오류:",error);
+    toast("작품 목록을 불러오지 못했습니다.");
+  });
+}
 function approvedApps(){return state.apps.filter(a=>a.approved);}
 function pendingApps(){return state.apps.filter(a=>!a.approved);}
 function score(app){return (app.likes||0)*5 + (app.views||0) + (app.feedback?.length||0)*3;}
@@ -191,7 +222,7 @@ function renderSubmit(){
     <label class="full">작품 소개<textarea name="description" maxlength="140" required>${v("description")}</textarea></label>
     <label class="full">왜 만들었나요?<textarea name="story" maxlength="220" required>${v("story")}</textarea></label>
     <label class="full">AI를 어떻게 활용했나요?<textarea name="aiUse" maxlength="220" required>${v("aiUse")}</textarea></label>
-    ${edit?"":`<label class="full">수정·삭제 코드<input name="managementCode" type="password" maxlength="20" required placeholder="나중에 작품을 수정하거나 삭제할 때 사용할 코드"><span class="code-help">친구에게 알려주지 말고 기억해두세요. 이 데모 버전에서는 브라우저에 저장되므로 실제 보안 기능은 아닙니다.</span></label>`}
+    
     <div class="full note">개인정보가 들어간 화면이나 링크는 등록하지 마세요. 작품 링크는 교사가 확인한 후 공개하는 것을 권장합니다.</div>
     <button class="primary full" type="submit">${edit?"수정 내용 저장":"교사에게 등록 요청 보내기"}</button>
   </form></div>`;
@@ -199,7 +230,7 @@ function renderSubmit(){
 function renderAdmin(){
   if(!isAdmin()) return `<div class="empty"><div class="emoji">🔒</div>교사 관리 로그인이 필요합니다.</div>`;
   const pend=pendingApps(), apps=approvedApps(), totalViews=apps.reduce((s,a)=>s+(a.views||0),0);
-  return `${sectionHeader("🧑‍🏫 교사 관리","승인 대기 작품을 확인하고 공개 여부를 결정합니다.")}<div class="admin-login-state">Google 관리자: ${escapeHTML(firebaseAdminUser?.email||"")}</div>
+  return `${sectionHeader("🧑‍🏫 교사 관리","학생이 등록한 작품이 모든 기기에서 공유됩니다. 승인 대기 작품을 확인하고 공개 여부를 결정합니다.")}<div class="admin-login-state">Google 관리자: ${escapeHTML(firebaseAdminUser?.email||"")}</div>
   <div class="stats-grid"><div class="stat-card"><span>공개 작품</span><strong>${apps.length}</strong></div><div class="stat-card"><span>승인 대기</span><strong>${pend.length}</strong></div><div class="stat-card"><span>전체 실행</span><strong>${totalViews}</strong></div><div class="stat-card"><span>전체 피드백</span><strong>${apps.reduce((s,a)=>s+(a.feedback?.length||0),0)}</strong></div></div>
   <div class="panel"><h3 style="margin-top:0">승인 대기 작품</h3>${pend.length?pend.map(a=>adminRow(a,true)).join(""):`<div class="empty"><div class="emoji">✅</div>승인 대기 작품이 없습니다.</div>`}</div>
   <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">공개 작품 관리</h3>${apps.map(a=>adminRow(a,false)).join("")}</div>
@@ -214,7 +245,6 @@ function renderDetail(){
     <div><div class="detail-tags"><span class="tag">${escapeHTML(a.category)}</span><span class="tag">${escapeHTML(a.grade)}</span>${isNew(a)?`<span class="tag">NEW</span>`:""}${rank>=0&&rank<4?`<span class="tag">👑 인기작</span>`:""}${!a.approved?`<span class="tag">승인 대기</span>`:""}</div>
     <h2>${escapeHTML(a.title)}</h2><p style="color:#6b7280">${escapeHTML(a.description)}</p><div class="detail-stats"><span>👀 ${a.views||0}</span><span>❤️ ${a.likes||0}</span><span>💬 ${a.feedback?.length||0}</span></div>
     <div class="detail-actions"><button class="primary" data-launch="${a.id}">▶ 웹앱 실행하기</button><button class="secondary" data-like="${a.id}">❤️ 추천하기</button><button class="ghost" data-feedback="${a.id}">💬 피드백 남기기</button></div>
-    <div class="owner-tools"><button class="ghost" data-owner-edit="${a.id}">✏️ 작성자 수정</button><button class="danger" data-owner-delete="${a.id}">🗑 작성자 삭제</button></div>
     <div class="content-block"><h4>👤 만든 친구</h4><p>${escapeHTML(a.grade)} · ${escapeHTML(a.author)}</p></div>
     <div class="content-block"><h4>💭 왜 만들었나요?</h4><p>${escapeHTML(a.story)}</p></div>
     <div class="content-block"><h4>🤖 AI를 어떻게 활용했나요?</h4><p>${escapeHTML(a.aiUse)}</p></div>
@@ -242,31 +272,92 @@ function bindDynamic(){
   const s=document.querySelector("#searchInput"),g=document.querySelector("#gradeFilter"); if(s)s.oninput=filterGallery;if(g)g.onchange=filterGallery;
 
   const form=document.querySelector("#submitForm");
-  if(form) form.onsubmit=(e)=>{
-    e.preventDefault(); const d=Object.fromEntries(new FormData(form).entries());
-    if(editingId){
-      const a=state.apps.find(x=>x.id===editingId); if(!a)return;
-      Object.assign(a,{title:d.title,category:d.category,grade:d.grade,author:d.author,url:d.url,image:d.image,description:d.description,story:d.story,aiUse:d.aiUse,emoji:categoryEmoji(d.category)});
-      saveState(); const id=editingId; editingId=null; toast("작품을 수정했습니다."); setRoute("detail",{detailId:id});
-    }else{
-      const app={id:"app"+Date.now(),...d,createdAt:new Date().toISOString().slice(0,10),views:0,likes:0,approved:false,emoji:categoryEmoji(d.category),reactions:{"재미있어요":0,"아이디어 좋아요":0,"배움이 있어요":0},feedback:[]};
-      state.apps.unshift(app);saveState();toast("작품 등록 요청이 저장되었습니다.");setRoute("home");
+  if(form) form.onsubmit=async(e)=>{
+    e.preventDefault();
+    const d=Object.fromEntries(new FormData(form).entries());
+    const newApp={
+      title:d.title,
+      category:d.category,
+      grade:d.grade,
+      author:d.author,
+      url:d.url,
+      image:d.image||"",
+      description:d.description,
+      story:d.story,
+      aiUse:d.aiUse,
+      createdAt:new Date().toISOString().slice(0,10),
+      createdAtServer:firebase.firestore.FieldValue.serverTimestamp(),
+      views:0,
+      likes:0,
+      approved:false,
+      emoji:categoryEmoji(d.category),
+      reactions:{"재미있어요":0,"아이디어 좋아요":0,"배움이 있어요":0},
+      feedback:[]
+    };
+    try{
+      await firestoreDb.collection("apps").add(newApp);
+      form.reset();
+      toast("작품 등록 요청을 보냈습니다. 교사 승인 후 공개됩니다.");
+      setRoute("home");
+    }catch(error){
+      console.error("작품 등록 오류:",error);
+      toast("작품 등록에 실패했습니다.");
     }
   };
 
   document.querySelectorAll("[data-preview]").forEach(b=>b.onclick=()=>setRoute("detail",{detailId:b.dataset.preview}));
-  document.querySelectorAll("[data-approve]").forEach(b=>b.onclick=()=>{const a=state.apps.find(x=>x.id===b.dataset.approve);if(a){a.approved=true;saveState();toast("작품을 공개했습니다.");render();}});
-  document.querySelectorAll("[data-unpublish]").forEach(b=>b.onclick=()=>{const a=state.apps.find(x=>x.id===b.dataset.unpublish);if(a){a.approved=false;saveState();toast("작품을 비공개로 전환했습니다.");render();}});
-  document.querySelectorAll("[data-admin-delete]").forEach(b=>b.onclick=()=>{if(isAdmin()&&confirm("관리자 권한으로 이 작품을 삭제할까요?")){state.apps=state.apps.filter(x=>x.id!==b.dataset.adminDelete);saveState();render();}});
+  document.querySelectorAll("[data-approve]").forEach(b=>b.onclick=async()=>{
+    try{
+      await firestoreDb.collection("apps").doc(b.dataset.approve).update({approved:true});
+      toast("작품을 공개했습니다.");
+    }catch(error){console.error(error);toast("승인 처리에 실패했습니다.");}
+  });
+  document.querySelectorAll("[data-unpublish]").forEach(b=>b.onclick=async()=>{
+    try{
+      await firestoreDb.collection("apps").doc(b.dataset.unpublish).update({approved:false});
+      toast("작품을 비공개로 전환했습니다.");
+    }catch(error){console.error(error);toast("비공개 처리에 실패했습니다.");}
+  });
+  document.querySelectorAll("[data-admin-delete]").forEach(b=>b.onclick=async()=>{
+    if(!isAdmin() || !confirm("관리자 권한으로 이 작품을 삭제할까요?")) return;
+    try{
+      await firestoreDb.collection("apps").doc(b.dataset.adminDelete).delete();
+      toast("작품을 삭제했습니다.");
+    }catch(error){console.error(error);toast("삭제에 실패했습니다.");}
+  });
   const logout=document.querySelector("#adminLogout"); if(logout) logout.onclick=()=>signOutAdmin();
   const back=document.querySelector("[data-back]"); if(back) back.onclick=()=>setRoute("home");
 
-  document.querySelectorAll("[data-launch]").forEach(b=>b.onclick=()=>{const a=state.apps.find(x=>x.id===b.dataset.launch);if(a){a.views=(a.views||0)+1;saveState();render();window.open(a.url,"_blank","noopener,noreferrer");}});
-  document.querySelectorAll("[data-like]").forEach(b=>b.onclick=()=>{const a=state.apps.find(x=>x.id===b.dataset.like);if(a){a.likes=(a.likes||0)+1;saveState();render();toast("추천했어요! ❤️");}});
-  document.querySelectorAll("[data-react]").forEach(b=>b.onclick=()=>{const a=state.apps.find(x=>x.id===b.dataset.react);if(a){a.reactions[b.dataset.reactName]=(a.reactions[b.dataset.reactName]||0)+1;saveState();render();toast("반응을 남겼어요!");}});
+  document.querySelectorAll("[data-launch]").forEach(b=>b.onclick=async()=>{
+    const a=state.apps.find(x=>x.id===b.dataset.launch);
+    if(!a) return;
+    window.open(a.url,"_blank","noopener,noreferrer");
+    try{
+      await firestoreDb.collection("apps").doc(a.id).update({
+        views:firebase.firestore.FieldValue.increment(1)
+      });
+    }catch(error){console.error("조회수 업데이트 오류:",error);}
+  });
+  document.querySelectorAll("[data-like]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.like;
+    try{
+      await firestoreDb.collection("apps").doc(id).update({
+        likes:firebase.firestore.FieldValue.increment(1)
+      });
+      toast("추천했어요! ❤️");
+    }catch(error){console.error(error);toast("추천을 저장하지 못했습니다.");}
+  });
+  document.querySelectorAll("[data-react]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.react;
+    const name=b.dataset.reactName;
+    try{
+      await firestoreDb.collection("apps").doc(id).update({
+        [`reactions.${name}`]:firebase.firestore.FieldValue.increment(1)
+      });
+      toast("반응을 남겼어요!");
+    }catch(error){console.error(error);toast("반응을 저장하지 못했습니다.");}
+  });
   document.querySelectorAll("[data-feedback]").forEach(b=>b.onclick=()=>{document.querySelector("#feedbackAppId").value=b.dataset.feedback;document.querySelector("#feedbackDialog").showModal();});
-  document.querySelectorAll("[data-owner-edit]").forEach(b=>b.onclick=()=>openManageCode(b.dataset.ownerEdit,"edit"));
-  document.querySelectorAll("[data-owner-delete]").forEach(b=>b.onclick=()=>openManageCode(b.dataset.ownerDelete,"delete"));
 }
 function filterGallery(){
   const q=(document.querySelector("#searchInput")?.value||"").toLowerCase(); const grade=document.querySelector("#gradeFilter")?.value||"";
@@ -288,7 +379,7 @@ function openAdminLogin(){
 }
 
 function bindDialogUtilities(){
-  ["feedbackDialog","adminLoginDialog","manageCodeDialog"].forEach(id=>{
+  ["feedbackDialog","adminLoginDialog"].forEach(id=>{
     const dialog=document.getElementById(id);
     if(!dialog || dialog.dataset.bound) return;
     dialog.dataset.bound="1";
@@ -296,31 +387,33 @@ function bindDialogUtilities(){
   });
 }
 
-function openManageCode(id,action){
-  document.querySelector("#manageTargetId").value=id; document.querySelector("#manageAction").value=action; document.querySelector("#manageCodeInput").value="";
-  document.querySelector("#manageDialogTitle").textContent=action==="edit"?"작품 수정 권한 확인":"작품 삭제 권한 확인";
-  document.querySelector("#manageCodeDialog").showModal(); setTimeout(()=>document.querySelector("#manageCodeInput").focus(),50);
-}
 
 document.querySelector("#feedbackClose").addEventListener("click",()=>document.querySelector("#feedbackDialog").close());
 document.querySelector("#adminLoginClose").addEventListener("click",()=>document.querySelector("#adminLoginDialog").close());
-document.querySelector("#manageCodeClose").addEventListener("click",()=>document.querySelector("#manageCodeDialog").close());
 
-document.querySelector("#feedbackForm").addEventListener("submit",e=>{
-  e.preventDefault(); const id=document.querySelector("#feedbackAppId").value; const a=state.apps.find(x=>x.id===id); if(!a)return;
-  a.feedback.push({type:document.querySelector("#feedbackType").value,nickname:document.querySelector("#feedbackNickname").value.trim(),text:document.querySelector("#feedbackText").value.trim(),date:new Date().toISOString().slice(0,10)});
-  saveState();document.querySelector("#feedbackDialog").close();e.target.reset();render();toast("피드백을 등록했습니다.");
+document.querySelector("#feedbackForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const id=document.querySelector("#feedbackAppId").value;
+  const feedback={
+    type:document.querySelector("#feedbackType").value,
+    nickname:document.querySelector("#feedbackNickname").value.trim(),
+    text:document.querySelector("#feedbackText").value.trim(),
+    date:new Date().toISOString().slice(0,10)
+  };
+  try{
+    await firestoreDb.collection("apps").doc(id).update({
+      feedback:firebase.firestore.FieldValue.arrayUnion(feedback)
+    });
+    document.querySelector("#feedbackDialog").close();
+    e.target.reset();
+    toast("피드백을 등록했습니다.");
+  }catch(error){
+    console.error(error);
+    toast("피드백 저장에 실패했습니다.");
+  }
 });
 
 
-document.querySelector("#manageCodeForm").addEventListener("submit",e=>{
-  e.preventDefault(); const id=document.querySelector("#manageTargetId").value; const action=document.querySelector("#manageAction").value; const code=document.querySelector("#manageCodeInput").value;
-  const a=state.apps.find(x=>x.id===id); if(!a)return;
-  if(code!==a.managementCode){toast("수정·삭제 코드가 맞지 않습니다.");return;}
-  document.querySelector("#manageCodeDialog").close();
-  if(action==="edit"){editingId=id;setRoute("submit");}
-  if(action==="delete"&&confirm("이 작품을 정말 삭제할까요?")){state.apps=state.apps.filter(x=>x.id!==id);saveState();toast("작품을 삭제했습니다.");setRoute("home");}
-});
 
 
 const googleAdminLogin=document.querySelector("#googleAdminLogin");
@@ -337,9 +430,10 @@ firebaseAuth.onAuthStateChanged(async user=>{
     }
     updateAdminSession(null);
     if(currentRoute==="admin"){
-      setRoute("home");
+      currentRoute="home";
     }
   }
+  startAppsListener();
 });
 
 document.querySelector(".brand").onclick=()=>setRoute("home");
