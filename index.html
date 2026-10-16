@@ -70,6 +70,29 @@
       <p class="admin-account-hint">관리자 계정만 교사 관리 화면에 접근할 수 있습니다.</p>
     </div>
   </dialog>
+
+  <dialog id="manageCodeDialog" class="dialog">
+    <div class="dialog-card">
+      <button class="dialog-close" type="button" id="manageCodeClose" aria-label="닫기">×</button>
+      <div class="manage-icon" aria-hidden="true">🔑</div>
+      <h3>작품 관리</h3>
+      <p class="small">등록할 때 설정한 수정·삭제 코드를 입력하세요.</p>
+      <form class="dialog-form" id="manageCodeForm">
+        <input type="hidden" id="manageTargetId" />
+        <label>
+          수정·삭제 코드
+          <input id="manageCodeInput" type="password" minlength="6" maxlength="20"
+                 autocomplete="off" required placeholder="6~20자 코드" />
+        </label>
+        <div class="manage-choice">
+          <button class="secondary" type="button" id="manageEditButton">✏️ 수정하기</button>
+          <button class="danger" type="button" id="manageDeleteButton">🗑 삭제하기</button>
+        </div>
+      </form>
+      <p class="code-security-note">코드를 아는 사람만 이 작품을 수정하거나 삭제할 수 있습니다.</p>
+    </div>
+  </dialog>
+
 <footer class="site-footer">
     <div class="footer-inner">
       <p>건강한 AI 활용, 행복한 학교 생활을 응원합니다!</p>

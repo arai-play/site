@@ -18,6 +18,8 @@ const googleProvider = new firebase.auth.GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: "select_account" });
 
 let firebaseAdminUser = null;
+let anonymousReady = false;
+let verifiedManageAppId = null;
 
 function isAllowedAdminUser(user){
   return !!user && ADMIN_EMAILS.includes((user.email || "").toLowerCase());
@@ -60,6 +62,7 @@ async function signOutAdmin(){
     await firebaseAuth.signOut();
   }finally{
     updateAdminSession(null);
+    anonymousReady=false;
     toast("교사 관리에서 로그아웃했습니다.");
     setRoute("home");
   }
@@ -118,8 +121,52 @@ function normalizeApp(doc){
     likes:Number(data.likes||0),
     approved:data.approved===true,
     reactions:data.reactions||{"재미있어요":0,"아이디어 좋아요":0,"배움이 있어요":0},
-    feedback:Array.isArray(data.feedback)?data.feedback:[]
+    feedback:Array.isArray(data.feedback)?data.feedback:[],
+    hasManageCode:data.hasManageCode===true
   };
+}
+
+
+function currentUid(){
+  return firebaseAuth.currentUser?.uid || null;
+}
+
+async function ensureAnonymousUser(){
+  if(firebaseAuth.currentUser) return firebaseAuth.currentUser;
+  const result = await firebaseAuth.signInAnonymously();
+  return result.user;
+}
+
+function sessionDocId(appId){
+  const uid=currentUid();
+  return uid ? `${uid}_${appId}` : "";
+}
+
+async function verifyManageCode(appId, code){
+  await ensureAnonymousUser();
+  const uid=currentUid();
+  if(!uid) throw new Error("auth-not-ready");
+  const sessionRef=firestoreDb.collection("editSessions").doc(`${uid}_${appId}`);
+  const expiresAt=firebase.firestore.Timestamp.fromMillis(Date.now()+15*60*1000);
+  await sessionRef.set({
+    appId,
+    code,
+    expiresAt,
+    createdAt:firebase.firestore.FieldValue.serverTimestamp()
+  });
+  verifiedManageAppId=appId;
+  return true;
+}
+
+async function clearManageSession(appId){
+  const uid=currentUid();
+  if(!uid) return;
+  try{
+    await firestoreDb.collection("editSessions").doc(`${uid}_${appId}`).delete();
+  }catch(e){
+    console.warn("관리 세션 정리 실패:",e);
+  }
+  if(verifiedManageAppId===appId) verifiedManageAppId=null;
 }
 
 function startAppsListener(){
@@ -222,7 +269,11 @@ function renderSubmit(){
     <label class="full">작품 소개<textarea name="description" maxlength="140" required>${v("description")}</textarea></label>
     <label class="full">왜 만들었나요?<textarea name="story" maxlength="220" required>${v("story")}</textarea></label>
     <label class="full">AI를 어떻게 활용했나요?<textarea name="aiUse" maxlength="220" required>${v("aiUse")}</textarea></label>
-    
+    ${edit?"":`<label class="full">수정·삭제 코드
+      <input name="managementCode" type="password" minlength="6" maxlength="20" required
+             placeholder="6~20자, 다른 기기에서도 사용할 코드를 정하세요">
+      <span class="code-help">휴대폰·노트북 등 다른 기기에서도 이 코드로 작품을 수정하거나 삭제할 수 있습니다. 잊어버리면 복구하기 어렵습니다.</span>
+    </label>`}
     <div class="full note">개인정보가 들어간 화면이나 링크는 등록하지 마세요. 작품 링크는 교사가 확인한 후 공개하는 것을 권장합니다.</div>
     <button class="primary full" type="submit">${edit?"수정 내용 저장":"교사에게 등록 요청 보내기"}</button>
   </form></div>`;
@@ -234,7 +285,7 @@ function renderAdmin(){
   <div class="stats-grid"><div class="stat-card"><span>공개 작품</span><strong>${apps.length}</strong></div><div class="stat-card"><span>승인 대기</span><strong>${pend.length}</strong></div><div class="stat-card"><span>전체 실행</span><strong>${totalViews}</strong></div><div class="stat-card"><span>전체 피드백</span><strong>${apps.reduce((s,a)=>s+(a.feedback?.length||0),0)}</strong></div></div>
   <div class="panel"><h3 style="margin-top:0">승인 대기 작품</h3>${pend.length?pend.map(a=>adminRow(a,true)).join(""):`<div class="empty"><div class="emoji">✅</div>승인 대기 작품이 없습니다.</div>`}</div>
   <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">공개 작품 관리</h3>${apps.map(a=>adminRow(a,false)).join("")}</div>
-  <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">관리자 세션</h3><p class="small">현재 버전은 정적 사이트라 관리자 코드를 완전히 숨길 수 없습니다. 실제 운영에서는 Firebase Authentication 같은 서버 기반 인증이 필요합니다.</p><button class="ghost" id="adminLogout">교사 관리 로그아웃</button></div>`;
+  <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">관리자 세션</h3><p class="small">관리자는 Firebase Google 인증으로 보호됩니다. 학생 작품의 수정·삭제는 등록 시 설정한 작품 관리 코드로 인증합니다.</p><button class="ghost" id="adminLogout">교사 관리 로그아웃</button></div>`;
 }
 function adminRow(a,pending){return `<div class="admin-row"><div class="rank-icon">${a.image?`<img src="${escapeHTML(a.image)}" alt="">`:a.emoji||categoryEmoji(a.category)}</div><div><div class="rank-title">${escapeHTML(a.title)}</div><div class="rank-sub">${escapeHTML(a.grade)} · ${escapeHTML(a.author)} · ${escapeHTML(a.category)}</div><div class="small">${escapeHTML(a.description)}</div></div><div class="admin-actions"><button class="secondary" data-preview="${a.id}">${pending?"미리보기":"보기"}</button>${pending?`<button class="primary" data-approve="${a.id}">승인</button>`:`<button class="ghost" data-unpublish="${a.id}">비공개</button>`}<button class="danger" data-admin-delete="${a.id}">삭제</button></div></div>`;}
 function renderDetail(){
@@ -244,7 +295,7 @@ function renderDetail(){
     <div class="detail-hero">${a.image?`<img src="${escapeHTML(a.image)}" alt="${escapeHTML(a.title)} 대표 이미지">`:a.emoji||categoryEmoji(a.category)}</div>
     <div><div class="detail-tags"><span class="tag">${escapeHTML(a.category)}</span><span class="tag">${escapeHTML(a.grade)}</span>${isNew(a)?`<span class="tag">NEW</span>`:""}${rank>=0&&rank<4?`<span class="tag">👑 인기작</span>`:""}${!a.approved?`<span class="tag">승인 대기</span>`:""}</div>
     <h2>${escapeHTML(a.title)}</h2><p style="color:#6b7280">${escapeHTML(a.description)}</p><div class="detail-stats"><span>👀 ${a.views||0}</span><span>❤️ ${a.likes||0}</span><span>💬 ${a.feedback?.length||0}</span></div>
-    <div class="detail-actions"><button class="primary" data-launch="${a.id}">▶ 웹앱 실행하기</button><button class="secondary" data-like="${a.id}">❤️ 추천하기</button><button class="ghost" data-feedback="${a.id}">💬 피드백 남기기</button></div>
+    <div class="detail-actions"><button class="primary" data-launch="${a.id}">▶ 웹앱 실행하기</button><button class="secondary" data-like="${a.id}">❤️ 추천하기</button><button class="ghost" data-feedback="${a.id}">💬 피드백 남기기</button></div>${a.hasManageCode?`<div class="owner-tools"><button class="ghost manage-work-btn" data-manage="${a.id}">🔑 작품 관리</button></div>`:""}
     <div class="content-block"><h4>👤 만든 친구</h4><p>${escapeHTML(a.grade)} · ${escapeHTML(a.author)}</p></div>
     <div class="content-block"><h4>💭 왜 만들었나요?</h4><p>${escapeHTML(a.story)}</p></div>
     <div class="content-block"><h4>🤖 AI를 어떻게 활용했나요?</h4><p>${escapeHTML(a.aiUse)}</p></div>
@@ -275,33 +326,88 @@ function bindDynamic(){
   if(form) form.onsubmit=async(e)=>{
     e.preventDefault();
     const d=Object.fromEntries(new FormData(form).entries());
-    const newApp={
-      title:d.title,
-      category:d.category,
-      grade:d.grade,
-      author:d.author,
-      url:d.url,
-      image:d.image||"",
-      description:d.description,
-      story:d.story,
-      aiUse:d.aiUse,
-      createdAt:new Date().toISOString().slice(0,10),
-      createdAtServer:firebase.firestore.FieldValue.serverTimestamp(),
-      views:0,
-      likes:0,
-      approved:false,
-      emoji:categoryEmoji(d.category),
-      reactions:{"재미있어요":0,"아이디어 좋아요":0,"배움이 있어요":0},
-      feedback:[]
-    };
+
     try{
-      await firestoreDb.collection("apps").add(newApp);
-      form.reset();
-      toast("작품 등록 요청을 보냈습니다. 교사 승인 후 공개됩니다.");
-      setRoute("home");
+      if(editingId){
+        if(verifiedManageAppId!==editingId && !isAdmin()){
+          toast("수정·삭제 코드를 다시 확인해 주세요.");
+          return;
+        }
+        const updateData={
+          title:d.title,
+          category:d.category,
+          grade:d.grade,
+          author:d.author,
+          url:d.url,
+          image:d.image||"",
+          description:d.description,
+          story:d.story,
+          aiUse:d.aiUse,
+          emoji:categoryEmoji(d.category),
+          updatedAtServer:firebase.firestore.FieldValue.serverTimestamp()
+        };
+        // 학생이 수정한 작품은 교사가 다시 확인하도록 승인 대기로 전환
+        if(!isAdmin()) updateData.approved=false;
+
+        await firestoreDb.collection("apps").doc(editingId).update(updateData);
+        const editedId=editingId;
+        editingId=null;
+        await clearManageSession(editedId);
+        toast(isAdmin()?"작품을 수정했습니다.":"수정했습니다. 교사 재승인 후 다시 공개됩니다.");
+        setRoute("home");
+      }else{
+        const code=(d.managementCode||"").trim();
+        if(code.length<6){
+          toast("수정·삭제 코드는 6자 이상으로 정해 주세요.");
+          return;
+        }
+        await ensureAnonymousUser();
+        const uid=currentUid();
+        if(!uid){
+          toast("사용자 인증을 준비하지 못했습니다.");
+          return;
+        }
+
+        const appRef=firestoreDb.collection("apps").doc();
+        const secretRef=firestoreDb.collection("appSecrets").doc(appRef.id);
+        const batch=firestoreDb.batch();
+
+        batch.set(appRef,{
+          title:d.title,
+          category:d.category,
+          grade:d.grade,
+          author:d.author,
+          url:d.url,
+          image:d.image||"",
+          description:d.description,
+          story:d.story,
+          aiUse:d.aiUse,
+          createdAt:new Date().toISOString().slice(0,10),
+          createdAtServer:firebase.firestore.FieldValue.serverTimestamp(),
+          views:0,
+          likes:0,
+          approved:false,
+          emoji:categoryEmoji(d.category),
+          reactions:{"재미있어요":0,"아이디어 좋아요":0,"배움이 있어요":0},
+          feedback:[],
+          ownerUid:uid,
+          hasManageCode:true
+        });
+
+        batch.set(secretRef,{
+          code,
+          ownerUid:uid,
+          createdAt:firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        await batch.commit();
+        form.reset();
+        toast("작품 등록 요청을 보냈습니다. 코드는 수정·삭제할 때 필요합니다.");
+        setRoute("home");
+      }
     }catch(error){
-      console.error("작품 등록 오류:",error);
-      toast("작품 등록에 실패했습니다.");
+      console.error("작품 저장 오류:",error);
+      toast(editingId?"작품 수정에 실패했습니다.":"작품 등록에 실패했습니다.");
     }
   };
 
@@ -321,7 +427,11 @@ function bindDynamic(){
   document.querySelectorAll("[data-admin-delete]").forEach(b=>b.onclick=async()=>{
     if(!isAdmin() || !confirm("관리자 권한으로 이 작품을 삭제할까요?")) return;
     try{
-      await firestoreDb.collection("apps").doc(b.dataset.adminDelete).delete();
+      const id=b.dataset.adminDelete;
+      const batch=firestoreDb.batch();
+      batch.delete(firestoreDb.collection("apps").doc(id));
+      batch.delete(firestoreDb.collection("appSecrets").doc(id));
+      await batch.commit();
       toast("작품을 삭제했습니다.");
     }catch(error){console.error(error);toast("삭제에 실패했습니다.");}
   });
@@ -358,6 +468,9 @@ function bindDynamic(){
     }catch(error){console.error(error);toast("반응을 저장하지 못했습니다.");}
   });
   document.querySelectorAll("[data-feedback]").forEach(b=>b.onclick=()=>{document.querySelector("#feedbackAppId").value=b.dataset.feedback;document.querySelector("#feedbackDialog").showModal();});
+  document.querySelectorAll("[data-manage]").forEach(b=>b.onclick=()=>{
+    openManageDialog(b.dataset.manage);
+  });
 }
 function filterGallery(){
   const q=(document.querySelector("#searchInput")?.value||"").toLowerCase(); const grade=document.querySelector("#gradeFilter")?.value||"";
@@ -378,8 +491,58 @@ function openAdminLogin(){
   document.querySelector("#adminLoginDialog").showModal();
 }
 
+
+function openManageDialog(appId){
+  verifiedManageAppId=null;
+  document.querySelector("#manageTargetId").value=appId;
+  document.querySelector("#manageCodeInput").value="";
+  document.querySelector("#manageCodeDialog").showModal();
+  setTimeout(()=>document.querySelector("#manageCodeInput").focus(),50);
+}
+
+async function handleManageAction(action){
+  const appId=document.querySelector("#manageTargetId").value;
+  const code=document.querySelector("#manageCodeInput").value.trim();
+  if(code.length<6){
+    toast("수정·삭제 코드를 입력해 주세요.");
+    return;
+  }
+
+  try{
+    await verifyManageCode(appId,code);
+    document.querySelector("#manageCodeDialog").close();
+
+    if(action==="edit"){
+      editingId=appId;
+      setRoute("submit");
+      return;
+    }
+
+    if(action==="delete"){
+      if(!confirm("이 작품을 정말 삭제할까요?")){
+        await clearManageSession(appId);
+        return;
+      }
+      const batch=firestoreDb.batch();
+      batch.delete(firestoreDb.collection("apps").doc(appId));
+      batch.delete(firestoreDb.collection("appSecrets").doc(appId));
+      await batch.commit();
+      await clearManageSession(appId);
+      toast("작품을 삭제했습니다.");
+      setRoute("home");
+    }
+  }catch(error){
+    console.error("작품 관리 인증 오류:",error);
+    if(error?.code==="permission-denied"){
+      toast("수정·삭제 코드가 맞지 않습니다.");
+    }else{
+      toast("작품 관리 권한을 확인하지 못했습니다.");
+    }
+  }
+}
+
 function bindDialogUtilities(){
-  ["feedbackDialog","adminLoginDialog"].forEach(id=>{
+  ["feedbackDialog","adminLoginDialog","manageCodeDialog"].forEach(id=>{
     const dialog=document.getElementById(id);
     if(!dialog || dialog.dataset.bound) return;
     dialog.dataset.bound="1";
@@ -390,6 +553,15 @@ function bindDialogUtilities(){
 
 document.querySelector("#feedbackClose").addEventListener("click",()=>document.querySelector("#feedbackDialog").close());
 document.querySelector("#adminLoginClose").addEventListener("click",()=>document.querySelector("#adminLoginDialog").close());
+
+document.querySelector("#manageCodeClose").addEventListener("click",()=>document.querySelector("#manageCodeDialog").close());
+document.querySelector("#manageEditButton").addEventListener("click",()=>handleManageAction("edit"));
+document.querySelector("#manageDeleteButton").addEventListener("click",()=>handleManageAction("delete"));
+document.querySelector("#manageCodeForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  handleManageAction("edit");
+});
+
 
 document.querySelector("#feedbackForm").addEventListener("submit",async e=>{
   e.preventDefault();
@@ -422,15 +594,27 @@ if(googleAdminLogin){
 }
 
 firebaseAuth.onAuthStateChanged(async user=>{
-  if(isAllowedAdminUser(user)){
+  if(user && isAllowedAdminUser(user)){
     updateAdminSession(user);
-  }else{
-    if(user){
-      try{ await firebaseAuth.signOut(); }catch(e){}
-    }
+    anonymousReady=false;
+  }else if(user && user.isAnonymous){
     updateAdminSession(null);
-    if(currentRoute==="admin"){
-      currentRoute="home";
+    anonymousReady=true;
+    if(currentRoute==="admin") currentRoute="home";
+  }else if(user){
+    try{ await firebaseAuth.signOut(); }catch(e){}
+    updateAdminSession(null);
+    anonymousReady=false;
+    return;
+  }else{
+    updateAdminSession(null);
+    anonymousReady=false;
+    try{
+      await firebaseAuth.signInAnonymously();
+      return;
+    }catch(error){
+      console.error("익명 인증 오류:",error);
+      toast("작품 등록용 인증을 준비하지 못했습니다.");
     }
   }
   startAppsListener();
