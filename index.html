@@ -10,8 +10,8 @@
 </head>
 <body>
   <header class="topbar">
-    <div class="brand" data-route="home" role="button" tabindex="0" aria-label="아라 AI PLAY 홈으로 이동">
-      <img src="arai-logo.png" alt="ARA AI PLAY" class="brand-logo-image" />
+    <div class="brand" data-route="home" role="button" tabindex="0" aria-label="arAi Play 홈으로 이동">
+      <img src="arai-logo.png" alt="ARAI PLAY" class="brand-logo-image" />
     </div>
 
     <nav class="main-nav" aria-label="주요 메뉴">
@@ -58,6 +58,40 @@
     </div>
   </dialog>
 
+  
+  <dialog id="suggestionDialog" class="dialog">
+    <div class="dialog-card dialog-card--mascot">
+      <button class="dialog-close" type="button" id="suggestionClose" aria-label="닫기">×</button>
+      <div class="feedback-mascot-wrap">
+        <img src="arai-mascot.png" alt="arAi Play 대표 캐릭터" class="feedback-mascot" />
+      </div>
+      <h3>웹 건의하기</h3>
+      <p class="feedback-guide">arAi Play을 더 즐겁고 편리하게 만들 아이디어를 들려주세요 💜</p>
+      <form class="dialog-form" id="suggestionForm">
+        <label>
+          종류
+          <select id="suggestionType" required>
+            <option value="기능 제안">💡 기능 제안</option>
+            <option value="불편한 점">🛠️ 불편한 점</option>
+            <option value="오류 신고">🐞 오류 신고</option>
+            <option value="기타">💬 기타</option>
+          </select>
+        </label>
+        <label>
+          닉네임 <span class="small">(선택)</span>
+          <input id="suggestionNickname" maxlength="12" placeholder="비워두면 익명으로 표시돼요" />
+        </label>
+        <label>
+          건의 내용
+          <textarea id="suggestionText" maxlength="400" required
+                    placeholder="어떤 점이 좋아지면 좋을지 구체적으로 적어주세요."></textarea>
+        </label>
+        <button class="primary wide" type="submit">건의사항 보내기</button>
+      </form>
+    </div>
+  </dialog>
+
+
   <dialog id="adminLoginDialog" class="dialog">
     <div class="dialog-card">
       <button class="dialog-close" type="button" id="adminLoginClose" aria-label="닫기">×</button>
@@ -97,6 +131,10 @@
 <footer class="site-footer">
     <div class="footer-inner">
       <p>건강한 AI 활용, 행복한 학교 생활을 응원합니다!</p>
+      <div class="footer-actions">
+        <button class="footer-suggestion-btn" id="footerSuggestionButton">💬 웹 건의하기</button>
+        <button class="footer-board-btn" id="footerSuggestionBoardButton">📋 건의 게시판</button>
+      </div>
       <button class="footer-admin-btn" id="footerAdminButton" aria-label="교사 관리" title="교사 관리">
         ⚙️
       </button>

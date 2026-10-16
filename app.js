@@ -92,8 +92,9 @@ const seedApps = [
   {id:"pending1", title:"날씨 옷차림 도우미", category:"생활", grade:"4학년", author:"구름빵", description:"날씨를 선택하면 알맞은 옷차림을 알려주는 앱", story:"아침마다 어떤 옷을 입을지 고민해서 만들었습니다.", aiUse:"조건에 맞는 안내 문구를 만드는 데 AI를 활용했습니다.", url:"https://example.com", image:"", emoji:"🌦️", createdAt:"2026-10-16", views:0, likes:0, approved:false, managementCode:"1234", reactions:{"재미있어요":0,"아이디어 좋아요":0,"배움이 있어요":0}, feedback:[]}
 ];
 
-let state = { apps: [] };
+let state = { apps: [], suggestions: [] };
 let appsUnsubscribe = null;
+let suggestionsUnsubscribe = null;
 let currentRoute = "home";
 let categoryFilter = "전체";
 let detailId = null;
@@ -126,6 +127,51 @@ function normalizeApp(doc){
   };
 }
 
+
+
+function normalizeSuggestion(doc){
+  const data=doc.data();
+  return {
+    id:doc.id,
+    type:data.type||"기타",
+    nickname:data.nickname||"익명",
+    text:data.text||"",
+    status:data.status||"접수",
+    answer:data.answer||"",
+    createdAt:data.createdAt||"",
+    updatedAt:data.updatedAt||""
+  };
+}
+
+function startSuggestionsListener(){
+  if(suggestionsUnsubscribe){
+    suggestionsUnsubscribe();
+    suggestionsUnsubscribe=null;
+  }
+  suggestionsUnsubscribe=firestoreDb.collection("suggestions")
+    .orderBy("createdAtServer","desc")
+    .onSnapshot(snapshot=>{
+      state.suggestions=snapshot.docs.map(normalizeSuggestion);
+      if(currentRoute==="suggestions" || currentRoute==="admin") render();
+    },error=>{
+      console.error("건의사항 불러오기 오류:",error);
+      // createdAtServer 인덱스/기존 데이터 문제 시 기본 조회로 한 번 더 시도
+      suggestionsUnsubscribe=firestoreDb.collection("suggestions").onSnapshot(snapshot=>{
+        state.suggestions=snapshot.docs.map(normalizeSuggestion)
+          .sort((a,b)=>(b.createdAt||"").localeCompare(a.createdAt||""));
+        if(currentRoute==="suggestions" || currentRoute==="admin") render();
+      },fallbackError=>{
+        console.error("건의사항 기본 조회 오류:",fallbackError);
+      });
+    });
+}
+
+function suggestionStatusClass(status){
+  if(status==="반영 완료") return "done";
+  if(status==="답변 완료") return "answered";
+  if(status==="확인 중") return "checking";
+  return "received";
+}
 
 function currentUid(){
   return firebaseAuth.currentUser?.uid || null;
@@ -278,6 +324,62 @@ function renderSubmit(){
     <button class="primary full" type="submit">${edit?"수정 내용 저장":"교사에게 등록 요청 보내기"}</button>
   </form></div>`;
 }
+
+function renderSuggestions(){
+  const items=[...state.suggestions];
+  return `
+    ${sectionHeader("📋 웹 건의 게시판","친구들의 의견과 운영자의 답변을 함께 확인할 수 있어요.")}
+    <div class="suggestion-toolbar">
+      <button class="primary" id="openSuggestionFromBoard">💬 새 건의 남기기</button>
+      <span class="small">개인정보·연락처는 적지 말아주세요.</span>
+    </div>
+    <div class="suggestion-list">
+      ${items.length?items.map(s=>`
+        <article class="suggestion-card">
+          <div class="suggestion-card-head">
+            <div class="suggestion-type">${escapeHTML(s.type)}</div>
+            <span class="suggestion-status ${suggestionStatusClass(s.status)}">${escapeHTML(s.status)}</span>
+          </div>
+          <div class="suggestion-meta">${escapeHTML(s.nickname||"익명")} · ${escapeHTML(s.createdAt||"")}</div>
+          <div class="suggestion-text">${escapeHTML(s.text)}</div>
+          ${s.answer?`
+            <div class="suggestion-answer">
+              <div class="suggestion-answer-title">💜 arAi Play 답변</div>
+              <div>${escapeHTML(s.answer)}</div>
+            </div>`:""}
+        </article>`).join(""):`<div class="empty"><div class="emoji">💬</div>아직 등록된 건의사항이 없습니다.<br>첫 번째 의견을 남겨보세요!</div>`}
+    </div>`;
+}
+
+function adminSuggestionCard(s){
+  return `
+    <div class="admin-suggestion-card">
+      <div class="suggestion-card-head">
+        <div>
+          <strong>${escapeHTML(s.type)}</strong>
+          <div class="small">${escapeHTML(s.nickname||"익명")} · ${escapeHTML(s.createdAt||"")}</div>
+        </div>
+        <span class="suggestion-status ${suggestionStatusClass(s.status)}">${escapeHTML(s.status)}</span>
+      </div>
+      <div class="suggestion-text admin-suggestion-text">${escapeHTML(s.text)}</div>
+      <label>
+        처리 상태
+        <select class="admin-suggestion-status" data-suggestion-status="${s.id}">
+          ${["접수","확인 중","답변 완료","반영 완료"].map(v=>`<option value="${v}" ${s.status===v?"selected":""}>${v}</option>`).join("")}
+        </select>
+      </label>
+      <label>
+        관리자 답변
+        <textarea class="admin-suggestion-answer" data-suggestion-answer="${s.id}" maxlength="500"
+                  placeholder="학생들에게 보여줄 답변을 작성하세요.">${escapeHTML(s.answer||"")}</textarea>
+      </label>
+      <div class="admin-suggestion-actions">
+        <button class="primary" data-save-suggestion="${s.id}">답변·상태 저장</button>
+        <button class="danger" data-delete-suggestion="${s.id}">삭제</button>
+      </div>
+    </div>`;
+}
+
 function renderAdmin(){
   if(!isAdmin()) return `<div class="empty"><div class="emoji">🔒</div>교사 관리 로그인이 필요합니다.</div>`;
   const pend=pendingApps(), apps=approvedApps(), totalViews=apps.reduce((s,a)=>s+(a.views||0),0);
@@ -285,6 +387,18 @@ function renderAdmin(){
   <div class="stats-grid"><div class="stat-card"><span>공개 작품</span><strong>${apps.length}</strong></div><div class="stat-card"><span>승인 대기</span><strong>${pend.length}</strong></div><div class="stat-card"><span>전체 실행</span><strong>${totalViews}</strong></div><div class="stat-card"><span>전체 피드백</span><strong>${apps.reduce((s,a)=>s+(a.feedback?.length||0),0)}</strong></div></div>
   <div class="panel"><h3 style="margin-top:0">승인 대기 작품</h3>${pend.length?pend.map(a=>adminRow(a,true)).join(""):`<div class="empty"><div class="emoji">✅</div>승인 대기 작품이 없습니다.</div>`}</div>
   <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">공개 작품 관리</h3>${apps.map(a=>adminRow(a,false)).join("")}</div>
+  <div class="panel" style="margin-top:20px">
+    <div class="admin-section-title">
+      <div>
+        <h3 style="margin:0">💬 웹 건의사항</h3>
+        <p class="small" style="margin:5px 0 0">학생 의견에 답변하고 처리 상태를 변경할 수 있습니다.</p>
+      </div>
+      <span class="suggestion-count">${state.suggestions.filter(s=>s.status!=="반영 완료").length}건 확인 필요</span>
+    </div>
+    <div class="admin-suggestion-list">
+      ${state.suggestions.length?state.suggestions.map(adminSuggestionCard).join(""):`<div class="empty"><div class="emoji">✅</div>등록된 웹 건의사항이 없습니다.</div>`}
+    </div>
+  </div>
   <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">관리자 세션</h3><p class="small">관리자는 Firebase Google 인증으로 보호됩니다. 학생 작품의 수정·삭제는 등록 시 설정한 작품 관리 코드로 인증합니다.</p><button class="ghost" id="adminLogout">교사 관리 로그아웃</button></div>`;
 }
 function adminRow(a,pending){return `<div class="admin-row"><div class="rank-icon">${a.image?`<img src="${escapeHTML(a.image)}" alt="">`:a.emoji||categoryEmoji(a.category)}</div><div><div class="rank-title">${escapeHTML(a.title)}</div><div class="rank-sub">${escapeHTML(a.grade)} · ${escapeHTML(a.author)} · ${escapeHTML(a.category)}</div><div class="small">${escapeHTML(a.description)}</div></div><div class="admin-actions"><button class="secondary" data-preview="${a.id}">${pending?"미리보기":"보기"}</button>${pending?`<button class="primary" data-approve="${a.id}">승인</button>`:`<button class="ghost" data-unpublish="${a.id}">비공개</button>`}<button class="danger" data-admin-delete="${a.id}">삭제</button></div></div>`;}
@@ -311,6 +425,7 @@ function render(){
   else if(currentRoute==="ranking") root.innerHTML=renderRanking();
   else if(currentRoute==="submit") root.innerHTML=renderSubmit();
   else if(currentRoute==="admin") root.innerHTML=renderAdmin();
+  else if(currentRoute==="suggestions") root.innerHTML=renderSuggestions();
   else if(currentRoute==="detail") root.innerHTML=renderDetail();
   bindDynamic();
 }
@@ -471,6 +586,40 @@ function bindDynamic(){
   document.querySelectorAll("[data-manage]").forEach(b=>b.onclick=()=>{
     openManageDialog(b.dataset.manage);
   });
+  const openSuggestionFromBoard=document.querySelector("#openSuggestionFromBoard");
+  if(openSuggestionFromBoard) openSuggestionFromBoard.onclick=()=>document.querySelector("#suggestionDialog").showModal();
+
+  document.querySelectorAll("[data-save-suggestion]").forEach(b=>b.onclick=async()=>{
+    if(!isAdmin()) return;
+    const id=b.dataset.saveSuggestion;
+    const status=document.querySelector(`[data-suggestion-status="${id}"]`)?.value||"접수";
+    const answer=document.querySelector(`[data-suggestion-answer="${id}"]`)?.value.trim()||"";
+    try{
+      await firestoreDb.collection("suggestions").doc(id).update({
+        status,
+        answer,
+        updatedAt:new Date().toISOString().slice(0,10),
+        updatedAtServer:firebase.firestore.FieldValue.serverTimestamp()
+      });
+      toast("건의사항 답변과 상태를 저장했습니다.");
+    }catch(error){
+      console.error(error);
+      toast("건의사항 저장에 실패했습니다.");
+    }
+  });
+
+  document.querySelectorAll("[data-delete-suggestion]").forEach(b=>b.onclick=async()=>{
+    if(!isAdmin()) return;
+    if(!confirm("이 건의사항을 삭제할까요?")) return;
+    try{
+      await firestoreDb.collection("suggestions").doc(b.dataset.deleteSuggestion).delete();
+      toast("건의사항을 삭제했습니다.");
+    }catch(error){
+      console.error(error);
+      toast("건의사항 삭제에 실패했습니다.");
+    }
+  });
+
 }
 function filterGallery(){
   const q=(document.querySelector("#searchInput")?.value||"").toLowerCase(); const grade=document.querySelector("#gradeFilter")?.value||"";
@@ -542,7 +691,7 @@ async function handleManageAction(action){
 }
 
 function bindDialogUtilities(){
-  ["feedbackDialog","adminLoginDialog","manageCodeDialog"].forEach(id=>{
+  ["feedbackDialog","suggestionDialog","adminLoginDialog","manageCodeDialog"].forEach(id=>{
     const dialog=document.getElementById(id);
     if(!dialog || dialog.dataset.bound) return;
     dialog.dataset.bound="1";
@@ -552,6 +701,7 @@ function bindDialogUtilities(){
 
 
 document.querySelector("#feedbackClose").addEventListener("click",()=>document.querySelector("#feedbackDialog").close());
+document.querySelector("#suggestionClose").addEventListener("click",()=>document.querySelector("#suggestionDialog").close());
 document.querySelector("#adminLoginClose").addEventListener("click",()=>document.querySelector("#adminLoginDialog").close());
 
 document.querySelector("#manageCodeClose").addEventListener("click",()=>document.querySelector("#manageCodeDialog").close());
@@ -562,6 +712,32 @@ document.querySelector("#manageCodeForm").addEventListener("submit",e=>{
   handleManageAction("edit");
 });
 
+
+
+document.querySelector("#suggestionForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  try{
+    await ensureAnonymousUser();
+    const nickname=document.querySelector("#suggestionNickname").value.trim()||"익명";
+    const item={
+      type:document.querySelector("#suggestionType").value,
+      nickname,
+      text:document.querySelector("#suggestionText").value.trim(),
+      status:"접수",
+      answer:"",
+      createdAt:new Date().toISOString().slice(0,10),
+      createdAtServer:firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy:currentUid()||""
+    };
+    await firestoreDb.collection("suggestions").add(item);
+    document.querySelector("#suggestionDialog").close();
+    e.target.reset();
+    toast("건의사항을 보냈습니다. 답변은 건의 게시판에서 확인할 수 있어요!");
+  }catch(error){
+    console.error("건의사항 등록 오류:",error);
+    toast("건의사항 등록에 실패했습니다.");
+  }
+});
 
 document.querySelector("#feedbackForm").addEventListener("submit",async e=>{
   e.preventDefault();
@@ -618,9 +794,20 @@ firebaseAuth.onAuthStateChanged(async user=>{
     }
   }
   startAppsListener();
+  startSuggestionsListener();
 });
 
 document.querySelector(".brand").onclick=()=>setRoute("home");
+
+const footerSuggestionButton=document.querySelector("#footerSuggestionButton");
+if(footerSuggestionButton){
+  footerSuggestionButton.addEventListener("click",()=>document.querySelector("#suggestionDialog").showModal());
+}
+const footerSuggestionBoardButton=document.querySelector("#footerSuggestionBoardButton");
+if(footerSuggestionBoardButton){
+  footerSuggestionBoardButton.addEventListener("click",()=>setRoute("suggestions"));
+}
+
 const footerAdminButton=document.querySelector("#footerAdminButton");
 if(footerAdminButton){
   footerAdminButton.addEventListener("click",()=>{
