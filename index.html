@@ -10,7 +10,7 @@
 <body>
   <header class="topbar">
     <div class="brand" data-route="home" role="button" tabindex="0">
-      <div class="brand-mark">AI</div>
+      <div class="brand-mark" aria-label="ARAI 로고"><span class="logo-ar">AR</span><span class="logo-a">A</span><span class="logo-i">I</span></div>
       <div>
         <h1>아라 AI PLAY</h1>
         <p>친구들이 AI와 함께 만든 작품 놀이터</p>
@@ -32,8 +32,8 @@
   <div id="toast" class="toast" aria-live="polite"></div>
 
   <dialog id="feedbackDialog" class="dialog">
-    <form method="dialog" class="dialog-card" id="feedbackForm">
-      <button class="dialog-close" value="cancel" aria-label="닫기">×</button>
+    <form class="dialog-card" id="feedbackForm">
+      <button class="dialog-close" type="button" id="feedbackClose" aria-label="닫기">×</button>
       <h3>친구에게 피드백 남기기</h3>
       <input type="hidden" id="feedbackAppId" />
       <label>
@@ -53,6 +53,28 @@
         <textarea id="feedbackText" maxlength="160" placeholder="친절하고 도움이 되는 말을 남겨주세요." required></textarea>
       </label>
       <button class="primary wide" value="default" type="submit">피드백 등록</button>
+    </form>
+  </dialog>
+
+  <dialog id="adminLoginDialog" class="dialog">
+    <form class="dialog-card" id="adminLoginForm">
+      <button class="dialog-close" type="button" id="adminLoginClose" aria-label="닫기">×</button>
+      <h3>교사 관리 로그인</h3>
+      <p class="small">관리자 코드를 입력해야 교사 관리 화면에 들어갈 수 있습니다.</p>
+      <label>관리자 코드<input id="adminCodeInput" type="password" autocomplete="current-password" required placeholder="관리자 코드"></label>
+      <button class="primary wide" type="submit">교사 관리 들어가기</button>
+    </form>
+  </dialog>
+
+  <dialog id="manageCodeDialog" class="dialog">
+    <form class="dialog-card" id="manageCodeForm">
+      <button class="dialog-close" type="button" id="manageCodeClose" aria-label="닫기">×</button>
+      <h3 id="manageDialogTitle">권한 확인</h3>
+      <p class="small">게시할 때 설정한 수정·삭제 코드를 입력하세요.</p>
+      <input type="hidden" id="manageTargetId">
+      <input type="hidden" id="manageAction">
+      <label>수정·삭제 코드<input id="manageCodeInput" type="password" inputmode="numeric" maxlength="20" required placeholder="게시할 때 설정한 코드"></label>
+      <button class="primary wide" type="submit">확인</button>
     </form>
   </dialog>
 
