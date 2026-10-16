@@ -60,12 +60,14 @@
   <dialog id="adminLoginDialog" class="dialog">
     <div class="dialog-card">
       <button class="dialog-close" type="button" id="adminLoginClose" aria-label="닫기">×</button>
+      <div class="google-login-icon" aria-hidden="true">G</div>
       <h3>교사 관리 로그인</h3>
-      <p class="small">관리자 코드를 입력해야 교사 관리 화면에 들어갈 수 있습니다.</p>
-      <form class="dialog-form" id="adminLoginForm">
-        <label>관리자 코드<input id="adminCodeInput" type="password" autocomplete="current-password" required placeholder="관리자 코드"></label>
-        <button class="primary wide" type="submit">교사 관리 들어가기</button>
-      </form>
+      <p class="small">등록된 관리자 Google 계정으로 로그인해 주세요.</p>
+      <button class="google-login-btn" type="button" id="googleAdminLogin">
+        <span class="google-g">G</span>
+        Google 계정으로 로그인
+      </button>
+      <p class="admin-account-hint">관리자 계정만 교사 관리 화면에 접근할 수 있습니다.</p>
     </div>
   </dialog>
 
@@ -93,6 +95,9 @@
     </div>
   </footer>
 
+
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

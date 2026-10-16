@@ -1,7 +1,70 @@
 const STORAGE_KEY = "ara-ai-play-v2";
-const ADMIN_SESSION_KEY = "ara-ai-admin-session";
+
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyD-p7te_kvlw_br7tYb68pL7gyJDQ6hgB4",
+  authDomain: "araai-play-451a5.firebaseapp.com",
+  projectId: "araai-play-451a5",
+  storageBucket: "araai-play-451a5.firebasestorage.app",
+  messagingSenderId: "530565876749",
+  appId: "1:530565876749:web:1616c8aa593f96ce915944",
+  measurementId: "G-ZGH6G2L1KM"
+};
+const ADMIN_EMAILS = ["sirgom777@gmail.com"];
+
+firebase.initializeApp(FIREBASE_CONFIG);
+const firebaseAuth = firebase.auth();
+const googleProvider = new firebase.auth.GoogleAuthProvider();
+googleProvider.setCustomParameters({ prompt: "select_account" });
+
+let firebaseAdminUser = null;
+
+function isAllowedAdminUser(user){
+  return !!user && ADMIN_EMAILS.includes((user.email || "").toLowerCase());
+}
+
+function isAdmin(){
+  return isAllowedAdminUser(firebaseAdminUser);
+}
+
+function updateAdminSession(user){
+  firebaseAdminUser = isAllowedAdminUser(user) ? user : null;
+}
+
+async function signInAdminWithGoogle(){
+  try{
+    const result = await firebaseAuth.signInWithPopup(googleProvider);
+    const user = result.user;
+    if(!isAllowedAdminUser(user)){
+      await firebaseAuth.signOut();
+      updateAdminSession(null);
+      toast("이 Google 계정은 관리자 계정으로 등록되어 있지 않습니다.");
+      return;
+    }
+    updateAdminSession(user);
+    const dialog=document.querySelector("#adminLoginDialog");
+    if(dialog?.open) dialog.close();
+    toast("교사 관리에 로그인했습니다.");
+    setRoute("admin");
+  }catch(error){
+    if(error?.code === "auth/popup-closed-by-user"){
+      return;
+    }
+    console.error(error);
+    toast("Google 로그인 중 오류가 발생했습니다.");
+  }
+}
+
+async function signOutAdmin(){
+  try{
+    await firebaseAuth.signOut();
+  }finally{
+    updateAdminSession(null);
+    toast("교사 관리에서 로그아웃했습니다.");
+    setRoute("home");
+  }
+}
+
 // 데모용 UI 잠금 코드입니다. 실제 운영 보안용으로는 사용하면 안 됩니다.
-const DEMO_ADMIN_CODE = "ARAI2026";
 
 const seedApps = [
   {
@@ -58,7 +121,6 @@ function toast(msg){
   const el=document.querySelector("#toast"); el.textContent=msg; el.classList.add("show");
   clearTimeout(window._toastTimer); window._toastTimer=setTimeout(()=>el.classList.remove("show"),1800);
 }
-function isAdmin(){return sessionStorage.getItem(ADMIN_SESSION_KEY)==="ok";}
 function categoryEmoji(cat){return ({게임:"🎮",학습:"📚",생활:"🌿",창작:"🎨",과학:"🧪",퀴즈:"🧠",기타:"✨"})[cat]||"✨";}
 function setRoute(route, options={}){
   if(route==="admin" && !isAdmin()){
@@ -137,7 +199,7 @@ function renderSubmit(){
 function renderAdmin(){
   if(!isAdmin()) return `<div class="empty"><div class="emoji">🔒</div>교사 관리 로그인이 필요합니다.</div>`;
   const pend=pendingApps(), apps=approvedApps(), totalViews=apps.reduce((s,a)=>s+(a.views||0),0);
-  return `${sectionHeader("🧑‍🏫 교사 관리","승인 대기 작품을 확인하고 공개 여부를 결정합니다.")}
+  return `${sectionHeader("🧑‍🏫 교사 관리","승인 대기 작품을 확인하고 공개 여부를 결정합니다.")}<div class="admin-login-state">Google 관리자: ${escapeHTML(firebaseAdminUser?.email||"")}</div>
   <div class="stats-grid"><div class="stat-card"><span>공개 작품</span><strong>${apps.length}</strong></div><div class="stat-card"><span>승인 대기</span><strong>${pend.length}</strong></div><div class="stat-card"><span>전체 실행</span><strong>${totalViews}</strong></div><div class="stat-card"><span>전체 피드백</span><strong>${apps.reduce((s,a)=>s+(a.feedback?.length||0),0)}</strong></div></div>
   <div class="panel"><h3 style="margin-top:0">승인 대기 작품</h3>${pend.length?pend.map(a=>adminRow(a,true)).join(""):`<div class="empty"><div class="emoji">✅</div>승인 대기 작품이 없습니다.</div>`}</div>
   <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">공개 작품 관리</h3>${apps.map(a=>adminRow(a,false)).join("")}</div>
@@ -196,7 +258,7 @@ function bindDynamic(){
   document.querySelectorAll("[data-approve]").forEach(b=>b.onclick=()=>{const a=state.apps.find(x=>x.id===b.dataset.approve);if(a){a.approved=true;saveState();toast("작품을 공개했습니다.");render();}});
   document.querySelectorAll("[data-unpublish]").forEach(b=>b.onclick=()=>{const a=state.apps.find(x=>x.id===b.dataset.unpublish);if(a){a.approved=false;saveState();toast("작품을 비공개로 전환했습니다.");render();}});
   document.querySelectorAll("[data-admin-delete]").forEach(b=>b.onclick=()=>{if(isAdmin()&&confirm("관리자 권한으로 이 작품을 삭제할까요?")){state.apps=state.apps.filter(x=>x.id!==b.dataset.adminDelete);saveState();render();}});
-  const logout=document.querySelector("#adminLogout"); if(logout) logout.onclick=()=>{sessionStorage.removeItem(ADMIN_SESSION_KEY);toast("교사 관리에서 로그아웃했습니다.");setRoute("home");};
+  const logout=document.querySelector("#adminLogout"); if(logout) logout.onclick=()=>signOutAdmin();
   const back=document.querySelector("[data-back]"); if(back) back.onclick=()=>setRoute("home");
 
   document.querySelectorAll("[data-launch]").forEach(b=>b.onclick=()=>{const a=state.apps.find(x=>x.id===b.dataset.launch);if(a){a.views=(a.views||0)+1;saveState();render();window.open(a.url,"_blank","noopener,noreferrer");}});
@@ -217,7 +279,13 @@ function filterGallery(){
   grid.querySelectorAll("[data-open]").forEach(el=>el.onclick=()=>setRoute("detail",{detailId:el.dataset.open}));
 }
 
-function openAdminLogin(){document.querySelector("#adminCodeInput").value="";document.querySelector("#adminLoginDialog").showModal();setTimeout(()=>document.querySelector("#adminCodeInput").focus(),50);}
+function openAdminLogin(){
+  if(isAdmin()){
+    setRoute("admin");
+    return;
+  }
+  document.querySelector("#adminLoginDialog").showModal();
+}
 
 function bindDialogUtilities(){
   ["feedbackDialog","adminLoginDialog","manageCodeDialog"].forEach(id=>{
@@ -244,11 +312,6 @@ document.querySelector("#feedbackForm").addEventListener("submit",e=>{
   saveState();document.querySelector("#feedbackDialog").close();e.target.reset();render();toast("피드백을 등록했습니다.");
 });
 
-document.querySelector("#adminLoginForm").addEventListener("submit",e=>{
-  e.preventDefault(); const code=document.querySelector("#adminCodeInput").value;
-  if(code!==DEMO_ADMIN_CODE){toast("관리자 코드가 맞지 않습니다.");return;}
-  sessionStorage.setItem(ADMIN_SESSION_KEY,"ok");document.querySelector("#adminLoginDialog").close();setRoute("admin");toast("교사 관리에 로그인했습니다.");
-});
 
 document.querySelector("#manageCodeForm").addEventListener("submit",e=>{
   e.preventDefault(); const id=document.querySelector("#manageTargetId").value; const action=document.querySelector("#manageAction").value; const code=document.querySelector("#manageCodeInput").value;
@@ -257,6 +320,26 @@ document.querySelector("#manageCodeForm").addEventListener("submit",e=>{
   document.querySelector("#manageCodeDialog").close();
   if(action==="edit"){editingId=id;setRoute("submit");}
   if(action==="delete"&&confirm("이 작품을 정말 삭제할까요?")){state.apps=state.apps.filter(x=>x.id!==id);saveState();toast("작품을 삭제했습니다.");setRoute("home");}
+});
+
+
+const googleAdminLogin=document.querySelector("#googleAdminLogin");
+if(googleAdminLogin){
+  googleAdminLogin.addEventListener("click",()=>signInAdminWithGoogle());
+}
+
+firebaseAuth.onAuthStateChanged(async user=>{
+  if(isAllowedAdminUser(user)){
+    updateAdminSession(user);
+  }else{
+    if(user){
+      try{ await firebaseAuth.signOut(); }catch(e){}
+    }
+    updateAdminSession(null);
+    if(currentRoute==="admin"){
+      setRoute("home");
+    }
+  }
 });
 
 document.querySelector(".brand").onclick=()=>setRoute("home");

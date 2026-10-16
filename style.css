@@ -324,3 +324,54 @@ textarea{min-height:110px;resize:vertical}
     right:14px;
   }
 }
+
+
+/* ===== Firebase Google 관리자 로그인 ===== */
+.google-login-icon{
+  width:52px;height:52px;border-radius:16px;
+  display:grid;place-items:center;margin:2px auto 0;
+  background:#fff;border:1px solid var(--line);
+  font-size:25px;font-weight:900;color:#4285f4;
+  box-shadow:0 8px 20px rgba(31,41,55,.08);
+}
+.google-login-btn{
+  width:100%;
+  min-height:48px;
+  border:1px solid #dadce0;
+  border-radius:14px;
+  background:#fff;
+  color:#3c4043;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:12px;
+  font-weight:800;
+  box-shadow:0 2px 7px rgba(60,64,67,.08);
+}
+.google-login-btn:hover{
+  background:#f8faff;
+  border-color:#cfd5dc;
+}
+.google-g{
+  display:grid;place-items:center;
+  width:24px;height:24px;border-radius:50%;
+  font-weight:900;color:#4285f4;
+  font-size:19px;
+}
+.admin-account-hint{
+  margin:0;
+  text-align:center;
+  font-size:12px;
+  color:var(--muted);
+  line-height:1.6;
+}
+.admin-login-state{
+  margin:-4px 0 18px;
+  padding:10px 14px;
+  border:1px solid #dbeafe;
+  border-radius:14px;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-size:13px;
+  font-weight:800;
+}
