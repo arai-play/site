@@ -278,8 +278,8 @@ function renderHome(){
   const popular=[...apps].sort((a,b)=>score(b)-score(a)).slice(0,4);
   const newest=[...apps].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,4);
   const categories=["게임","학습","생활","창작","과학","퀴즈"];
-  return `<section class="hero"><div><h2>친구들이 AI와 함께 만든<br>멋진 작품을 만나보세요.</h2><p>게임, 학습 도구, 생활 아이디어까지. 작품을 실행하고 좋은 점을 찾아 피드백을 남겨보세요.</p><div class="hero-actions"><button class="hero-primary" data-route="new">✨ 새 작품 보기</button><button class="hero-secondary" data-route="submit">＋ 내 작품 등록</button></div></div><div class="hero-art"><div class="hero-device"><div>🎮</div><div>🧠</div><div>🎨</div><div>🚀</div></div></div></section>
-  <section class="section">${sectionHeader("🔥 지금 인기 있는 작품","친구들이 많이 보고 좋아한 작품이에요.","popular")}<div class="app-grid">${popular.map(a=>appCard(a,{popular:true})).join("")}</div></section>
+  return `<section class="hero"><div><h2>다양한 AI 작품을<br>만나보세요.</h2><p>게임, 학습 도구, 생활 아이디어까지. 작품을 자유롭게 실행하고 좋은 점과 개선 의견을 나눠보세요.</p><div class="hero-actions"><button class="hero-primary" data-route="new">✨ 새 작품 보기</button><button class="hero-secondary" data-route="submit">＋ 작품 등록</button></div></div><div class="hero-art"><div class="hero-device"><div>🎮</div><div>🧠</div><div>🎨</div><div>🚀</div></div></div></section>
+  <section class="section">${sectionHeader("🔥 지금 인기 있는 작품","많은 관심을 받고 있는 작품이에요.","popular")}<div class="app-grid">${popular.map(a=>appCard(a,{popular:true})).join("")}</div></section>
   <section class="section">${sectionHeader("✨ 새로 나온 작품","최근 등록된 작품을 가장 먼저 만나보세요.","new")}<div class="app-grid">${newest.map(a=>appCard(a)).join("")}</div></section>
   <section class="section">${sectionHeader("🧭 카테고리","관심 있는 분야의 작품을 골라보세요.")}<div class="category-strip">${categories.map(c=>`<button class="category-card" data-category-link="${c}"><span>${categoryEmoji(c)}</span>${c}</button>`).join("")}</div></section>
   <section class="section">${sectionHeader("🏆 TOP 5","추천·실행·피드백을 함께 반영한 랭킹입니다.","ranking")}<div class="rank-list">${[...apps].sort((a,b)=>score(b)-score(a)).slice(0,5).map((a,i)=>rankRow(a,i)).join("")}</div></section>`;
@@ -304,7 +304,7 @@ function renderRanking(){
 function renderSubmit(){
   const edit=editingId?state.apps.find(a=>a.id===editingId):null;
   const v=(name)=>edit?escapeHTML(edit[name]||""):"";
-  return `${sectionHeader(edit?"✏️ 작품 수정":"＋ 내 작품 등록",edit?"수정 후 저장하면 기존 작품에 반영됩니다.":"등록한 작품은 교사가 확인한 뒤 공개됩니다.")}
+  return `${sectionHeader(edit?"✏️ 작품 수정":"＋ 작품 등록",edit?"수정 후 저장하면 기존 작품에 반영됩니다.":"등록한 작품은 교사가 확인한 뒤 공개됩니다.")}
   <div class="panel"><form id="submitForm" class="form-grid">
     <label>작품 이름<input name="title" maxlength="40" required value="${v("title")}" placeholder="예: 우주 수학 대작전"></label>
     <label>카테고리<select name="category" required>${["게임","학습","생활","창작","과학","퀴즈","기타"].map(c=>`<option ${edit?.category===c?"selected":""}>${c}</option>`).join("")}</select></label>
@@ -328,7 +328,7 @@ function renderSubmit(){
 function renderSuggestions(){
   const items=[...state.suggestions];
   return `
-    ${sectionHeader("📋 웹 건의 게시판","친구들의 의견과 운영자의 답변을 함께 확인할 수 있어요.")}
+    ${sectionHeader("📋 웹 건의 게시판","이용자 의견과 운영자의 답변을 함께 확인할 수 있어요.")}
     <div class="suggestion-toolbar">
       <button class="primary" id="openSuggestionFromBoard">💬 새 건의 남기기</button>
       <span class="small">개인정보·연락처는 적지 말아주세요.</span>
@@ -410,10 +410,10 @@ function renderDetail(){
     <div><div class="detail-tags"><span class="tag">${escapeHTML(a.category)}</span><span class="tag">${escapeHTML(a.grade)}</span>${isNew(a)?`<span class="tag">NEW</span>`:""}${rank>=0&&rank<4?`<span class="tag">👑 인기작</span>`:""}${!a.approved?`<span class="tag">승인 대기</span>`:""}</div>
     <h2>${escapeHTML(a.title)}</h2><p style="color:#6b7280">${escapeHTML(a.description)}</p><div class="detail-stats"><span>👀 ${a.views||0}</span><span>❤️ ${a.likes||0}</span><span>💬 ${a.feedback?.length||0}</span></div>
     <div class="detail-actions"><button class="primary" data-launch="${a.id}">▶ 웹앱 실행하기</button><button class="secondary" data-like="${a.id}">❤️ 추천하기</button><button class="ghost" data-feedback="${a.id}">💬 피드백 남기기</button></div>${a.hasManageCode?`<div class="owner-tools"><button class="ghost manage-work-btn" data-manage="${a.id}">🔑 작품 관리</button></div>`:""}
-    <div class="content-block"><h4>👤 만든 친구</h4><p>${escapeHTML(a.grade)} · ${escapeHTML(a.author)}</p></div>
+    <div class="content-block"><h4>👤 제작자</h4><p>${escapeHTML(a.grade)} · ${escapeHTML(a.author)}</p></div>
     <div class="content-block"><h4>💭 왜 만들었나요?</h4><p>${escapeHTML(a.story)}</p></div>
     <div class="content-block"><h4>🤖 AI를 어떻게 활용했나요?</h4><p>${escapeHTML(a.aiUse)}</p></div>
-    <div class="content-block"><h4>친구들의 반응</h4><div class="reactions">${Object.entries(a.reactions||{}).map(([k,v])=>`<button class="react-btn" data-react="${a.id}" data-react-name="${k}">${k==="재미있어요"?"😆":k==="아이디어 좋아요"?"💡":"📚"} ${k} ${v}</button>`).join("")}</div></div>
+    <div class="content-block"><h4>이 작품의 반응</h4><div class="reactions">${Object.entries(a.reactions||{}).map(([k,v])=>`<button class="react-btn" data-react="${a.id}" data-react-name="${k}">${k==="재미있어요"?"😆":k==="아이디어 좋아요"?"💡":"📚"} ${k} ${v}</button>`).join("")}</div></div>
     <div class="content-block"><h4>💬 피드백</h4>${a.feedback?.length?a.feedback.slice().reverse().map(f=>`<div class="feedback-item"><div class="feedback-head"><span class="feedback-type">${escapeHTML(f.type)} · ${escapeHTML(f.nickname)}</span><span class="small">${escapeHTML(f.date)}</span></div><div class="feedback-text">${escapeHTML(f.text)}</div></div>`).join(""):`<p>아직 피드백이 없습니다. 첫 피드백을 남겨보세요!</p>`}</div>
     </div></div>`;
 }
