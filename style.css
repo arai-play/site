@@ -574,3 +574,29 @@ textarea{min-height:110px;resize:vertical}
     padding-right:20px;
   }
 }
+
+
+/* ===== 무분별한 평가 방지: 기기당 1회 참여 ===== */
+.reaction-guide{
+  margin:0 0 10px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.55;
+}
+.selected-action{
+  background:#eef0ff!important;
+  border-color:#cfd3ff!important;
+  color:var(--brand)!important;
+  font-weight:900!important;
+}
+button[disabled].selected-action{
+  opacity:1;
+  cursor:default;
+}
+.react-btn[disabled]:not(.selected-action){
+  opacity:.45;
+  cursor:not-allowed;
+}
+.detail-actions button[disabled]{
+  cursor:default;
+}

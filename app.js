@@ -240,6 +240,32 @@ function isNew(app){
   const d = new Date(app.createdAt+"T00:00:00");
   return (now-d)/(1000*60*60*24) <= 7;
 }
+
+const DEVICE_ACTION_KEY = "arai-device-actions-v1";
+
+function loadDeviceActions(){
+  try{
+    return JSON.parse(localStorage.getItem(DEVICE_ACTION_KEY)) || {};
+  }catch(e){
+    return {};
+  }
+}
+function saveDeviceActions(actions){
+  localStorage.setItem(DEVICE_ACTION_KEY, JSON.stringify(actions));
+}
+function hasDeviceAction(appId, actionKey){
+  return !!loadDeviceActions()[`${appId}:${actionKey}`];
+}
+function markDeviceAction(appId, actionKey){
+  const actions=loadDeviceActions();
+  actions[`${appId}:${actionKey}`]=true;
+  saveDeviceActions(actions);
+}
+function selectedReaction(appId){
+  return ["재미있어요","아이디어 좋아요","배움이 있어요"]
+    .find(name=>hasDeviceAction(appId,`reaction:${name}`)) || "";
+}
+
 function escapeHTML(str=""){return String(str).replace(/[&<>"']/g,s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[s]));}
 function toast(msg){
   const el=document.querySelector("#toast"); el.textContent=msg; el.classList.add("show");
@@ -278,7 +304,7 @@ function renderHome(){
   const popular=[...apps].sort((a,b)=>score(b)-score(a)).slice(0,4);
   const newest=[...apps].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,4);
   const categories=["게임","학습","생활","창작","과학","퀴즈"];
-  return `<section class="hero"><div><h2>다양한 AI 작품을<br>만나보세요.</h2><p>게임, 학습 도구, 생활 아이디어까지. 작품을 자유롭게 실행하고 의견을 나눠보세요.</p><div class="hero-actions"><button class="hero-primary" data-route="new">✨ 새 작품 보기</button><button class="hero-secondary" data-route="submit">＋ 작품 등록</button></div></div><div class="hero-art"><div class="hero-device"><div>🎮</div><div>🧠</div><div>🎨</div><div>🚀</div></div></div></section>
+  return `<section class="hero"><div><h2>다양한 AI 작품을<br>만나보세요.</h2><p>게임, 학습 도구, 생활 아이디어까지. 작품을 자유롭게 실행하고 좋은 점과 개선 의견을 나눠보세요.</p><div class="hero-actions"><button class="hero-primary" data-route="new">✨ 새 작품 보기</button><button class="hero-secondary" data-route="submit">＋ 작품 등록</button></div></div><div class="hero-art"><div class="hero-device"><div>🎮</div><div>🧠</div><div>🎨</div><div>🚀</div></div></div></section>
   <section class="section">${sectionHeader("🔥 지금 인기 있는 작품","많은 관심을 받고 있는 작품이에요.","popular")}<div class="app-grid">${popular.map(a=>appCard(a,{popular:true})).join("")}</div></section>
   <section class="section">${sectionHeader("✨ 새로 나온 작품","최근 등록된 작품을 가장 먼저 만나보세요.","new")}<div class="app-grid">${newest.map(a=>appCard(a)).join("")}</div></section>
   <section class="section">${sectionHeader("🧭 카테고리","관심 있는 분야의 작품을 골라보세요.")}<div class="category-strip">${categories.map(c=>`<button class="category-card" data-category-link="${c}"><span>${categoryEmoji(c)}</span>${c}</button>`).join("")}</div></section>
@@ -409,11 +435,21 @@ function renderDetail(){
     <div class="detail-hero">${a.image?`<img src="${escapeHTML(a.image)}" alt="${escapeHTML(a.title)} 대표 이미지">`:a.emoji||categoryEmoji(a.category)}</div>
     <div><div class="detail-tags"><span class="tag">${escapeHTML(a.category)}</span><span class="tag">${escapeHTML(a.grade)}</span>${isNew(a)?`<span class="tag">NEW</span>`:""}${rank>=0&&rank<4?`<span class="tag">👑 인기작</span>`:""}${!a.approved?`<span class="tag">승인 대기</span>`:""}</div>
     <h2>${escapeHTML(a.title)}</h2><p style="color:#6b7280">${escapeHTML(a.description)}</p><div class="detail-stats"><span>👀 ${a.views||0}</span><span>❤️ ${a.likes||0}</span><span>💬 ${a.feedback?.length||0}</span></div>
-    <div class="detail-actions"><button class="primary" data-launch="${a.id}">▶ 웹앱 실행하기</button><button class="secondary" data-like="${a.id}">❤️ 추천하기</button><button class="ghost" data-feedback="${a.id}">💬 피드백 남기기</button></div>${a.hasManageCode?`<div class="owner-tools"><button class="ghost manage-work-btn" data-manage="${a.id}">🔑 작품 관리</button></div>`:""}
+    <div class="detail-actions"><button class="primary" data-launch="${a.id}">▶ 웹앱 실행하기</button><button class="secondary ${hasDeviceAction(a.id,"like")?"selected-action":""}" data-like="${a.id}" ${hasDeviceAction(a.id,"like")?"disabled":""}>${hasDeviceAction(a.id,"like")?"❤️ 추천했어요":"❤️ 추천하기"}</button><button class="ghost" data-feedback="${a.id}">💬 피드백 남기기</button></div>${a.hasManageCode?`<div class="owner-tools"><button class="ghost manage-work-btn" data-manage="${a.id}">🔑 작품 관리</button></div>`:""}
     <div class="content-block"><h4>👤 제작자</h4><p>${escapeHTML(a.grade)} · ${escapeHTML(a.author)}</p></div>
     <div class="content-block"><h4>💭 왜 만들었나요?</h4><p>${escapeHTML(a.story)}</p></div>
     <div class="content-block"><h4>🤖 AI를 어떻게 활용했나요?</h4><p>${escapeHTML(a.aiUse)}</p></div>
-    <div class="content-block"><h4>이 작품의 반응</h4><div class="reactions">${Object.entries(a.reactions||{}).map(([k,v])=>`<button class="react-btn" data-react="${a.id}" data-react-name="${k}">${k==="재미있어요"?"😆":k==="아이디어 좋아요"?"💡":"📚"} ${k} ${v}</button>`).join("")}</div></div>
+    <div class="content-block">
+      <h4>작품 응원하기</h4>
+      <p class="reaction-guide">한 작품에는 이 기기에서 추천 1회, 응원 반응 1가지만 남길 수 있어요.</p>
+      <div class="reactions">${(()=>{
+        const chosen=selectedReaction(a.id);
+        return Object.entries(a.reactions||{}).map(([k,v])=>{
+          const selected=chosen===k;
+          return `<button class="react-btn ${selected?"selected-action":""}" data-react="${a.id}" data-react-name="${k}" ${chosen?"disabled":""}>${k==="재미있어요"?"😆":k==="아이디어 좋아요"?"💡":"📚"} ${k} ${v}${selected?" · 선택됨":""}</button>`;
+        }).join("");
+      })()}</div>
+    </div>
     <div class="content-block"><h4>💬 피드백</h4>${a.feedback?.length?a.feedback.slice().reverse().map(f=>`<div class="feedback-item"><div class="feedback-head"><span class="feedback-type">${escapeHTML(f.type)} · ${escapeHTML(f.nickname)}</span><span class="small">${escapeHTML(f.date)}</span></div><div class="feedback-text">${escapeHTML(f.text)}</div></div>`).join(""):`<p>아직 피드백이 없습니다. 첫 피드백을 남겨보세요!</p>`}</div>
     </div></div>`;
 }
@@ -565,22 +601,40 @@ function bindDynamic(){
   });
   document.querySelectorAll("[data-like]").forEach(b=>b.onclick=async()=>{
     const id=b.dataset.like;
+    if(hasDeviceAction(id,"like")){
+      toast("이 기기에서는 이미 추천했습니다.");
+      return;
+    }
     try{
       await firestoreDb.collection("apps").doc(id).update({
         likes:firebase.firestore.FieldValue.increment(1)
       });
-      toast("추천했어요! ❤️");
-    }catch(error){console.error(error);toast("추천을 저장하지 못했습니다.");}
+      markDeviceAction(id,"like");
+      toast("추천을 남겼습니다.");
+      render();
+    }catch(error){
+      console.error(error);
+      toast("추천을 저장하지 못했습니다.");
+    }
   });
   document.querySelectorAll("[data-react]").forEach(b=>b.onclick=async()=>{
     const id=b.dataset.react;
     const name=b.dataset.reactName;
+    if(selectedReaction(id)){
+      toast("이 작품에는 한 가지 응원 반응만 선택할 수 있습니다.");
+      return;
+    }
     try{
       await firestoreDb.collection("apps").doc(id).update({
         [`reactions.${name}`]:firebase.firestore.FieldValue.increment(1)
       });
-      toast("반응을 남겼어요!");
-    }catch(error){console.error(error);toast("반응을 저장하지 못했습니다.");}
+      markDeviceAction(id,`reaction:${name}`);
+      toast("응원 반응을 남겼습니다.");
+      render();
+    }catch(error){
+      console.error(error);
+      toast("반응을 저장하지 못했습니다.");
+    }
   });
   document.querySelectorAll("[data-feedback]").forEach(b=>b.onclick=()=>{document.querySelector("#feedbackAppId").value=b.dataset.feedback;document.querySelector("#feedbackDialog").showModal();});
   document.querySelectorAll("[data-manage]").forEach(b=>b.onclick=()=>{
