@@ -278,7 +278,7 @@ function renderHome(){
   const popular=[...apps].sort((a,b)=>score(b)-score(a)).slice(0,4);
   const newest=[...apps].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,4);
   const categories=["게임","학습","생활","창작","과학","퀴즈"];
-  return `<section class="hero"><div><h2>다양한 AI 작품을<br>만나보세요.</h2><p>게임, 학습 도구, 생활 아이디어까지. 작품을 자유롭게 실행하고 좋은 점과 개선 의견을 나눠보세요.</p><div class="hero-actions"><button class="hero-primary" data-route="new">✨ 새 작품 보기</button><button class="hero-secondary" data-route="submit">＋ 작품 등록</button></div></div><div class="hero-art"><div class="hero-device"><div>🎮</div><div>🧠</div><div>🎨</div><div>🚀</div></div></div></section>
+  return `<section class="hero"><div><h2>다양한 AI 작품을<br>만나보세요.</h2><p>게임, 학습 도구, 생활 아이디어까지. 작품을 자유롭게 실행하고 의견을 나눠보세요.</p><div class="hero-actions"><button class="hero-primary" data-route="new">✨ 새 작품 보기</button><button class="hero-secondary" data-route="submit">＋ 작품 등록</button></div></div><div class="hero-art"><div class="hero-device"><div>🎮</div><div>🧠</div><div>🎨</div><div>🚀</div></div></div></section>
   <section class="section">${sectionHeader("🔥 지금 인기 있는 작품","많은 관심을 받고 있는 작품이에요.","popular")}<div class="app-grid">${popular.map(a=>appCard(a,{popular:true})).join("")}</div></section>
   <section class="section">${sectionHeader("✨ 새로 나온 작품","최근 등록된 작품을 가장 먼저 만나보세요.","new")}<div class="app-grid">${newest.map(a=>appCard(a)).join("")}</div></section>
   <section class="section">${sectionHeader("🧭 카테고리","관심 있는 분야의 작품을 골라보세요.")}<div class="category-strip">${categories.map(c=>`<button class="category-card" data-category-link="${c}"><span>${categoryEmoji(c)}</span>${c}</button>`).join("")}</div></section>
