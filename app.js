@@ -241,7 +241,7 @@ function isNew(app){
   return (now-d)/(1000*60*60*24) <= 7;
 }
 
-const DEVICE_ACTION_KEY = "arai-device-actions-v1";
+const DEVICE_ACTION_KEY = "arai-device-actions-v2";
 
 function loadDeviceActions(){
   try{
@@ -259,6 +259,11 @@ function hasDeviceAction(appId, actionKey){
 function markDeviceAction(appId, actionKey){
   const actions=loadDeviceActions();
   actions[`${appId}:${actionKey}`]=true;
+  saveDeviceActions(actions);
+}
+function unmarkDeviceAction(appId, actionKey){
+  const actions=loadDeviceActions();
+  delete actions[`${appId}:${actionKey}`];
   saveDeviceActions(actions);
 }
 function selectedReaction(appId){
@@ -425,6 +430,11 @@ function renderAdmin(){
       ${state.suggestions.length?state.suggestions.map(adminSuggestionCard).join(""):`<div class="empty"><div class="emoji">✅</div>등록된 웹 건의사항이 없습니다.</div>`}
     </div>
   </div>
+  <div class="panel" style="margin-top:20px">
+    <h3 style="margin-top:0">🧹 참여 기록 초기화</h3>
+    <p class="small">기존 작품의 추천 수와 응원 반응 수를 모두 0으로 초기화합니다. 작품·조회수·피드백은 삭제하지 않습니다.</p>
+    <button class="danger" id="resetEngagementLogs">추천·응원 기록 전체 초기화</button>
+  </div>
   <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">관리자 세션</h3><p class="small">관리자는 Firebase Google 인증으로 보호됩니다. 학생 작품의 수정·삭제는 등록 시 설정한 작품 관리 코드로 인증합니다.</p><button class="ghost" id="adminLogout">교사 관리 로그아웃</button></div>`;
 }
 function adminRow(a,pending){return `<div class="admin-row"><div class="rank-icon">${a.image?`<img src="${escapeHTML(a.image)}" alt="">`:a.emoji||categoryEmoji(a.category)}</div><div><div class="rank-title">${escapeHTML(a.title)}</div><div class="rank-sub">${escapeHTML(a.grade)} · ${escapeHTML(a.author)} · ${escapeHTML(a.category)}</div><div class="small">${escapeHTML(a.description)}</div></div><div class="admin-actions"><button class="secondary" data-preview="${a.id}">${pending?"미리보기":"보기"}</button>${pending?`<button class="primary" data-approve="${a.id}">승인</button>`:`<button class="ghost" data-unpublish="${a.id}">비공개</button>`}<button class="danger" data-admin-delete="${a.id}">삭제</button></div></div>`;}
@@ -435,18 +445,18 @@ function renderDetail(){
     <div class="detail-hero">${a.image?`<img src="${escapeHTML(a.image)}" alt="${escapeHTML(a.title)} 대표 이미지">`:a.emoji||categoryEmoji(a.category)}</div>
     <div><div class="detail-tags"><span class="tag">${escapeHTML(a.category)}</span><span class="tag">${escapeHTML(a.grade)}</span>${isNew(a)?`<span class="tag">NEW</span>`:""}${rank>=0&&rank<4?`<span class="tag">👑 인기작</span>`:""}${!a.approved?`<span class="tag">승인 대기</span>`:""}</div>
     <h2>${escapeHTML(a.title)}</h2><p style="color:#6b7280">${escapeHTML(a.description)}</p><div class="detail-stats"><span>👀 ${a.views||0}</span><span>❤️ ${a.likes||0}</span><span>💬 ${a.feedback?.length||0}</span></div>
-    <div class="detail-actions"><button class="primary" data-launch="${a.id}">▶ 웹앱 실행하기</button><button class="secondary ${hasDeviceAction(a.id,"like")?"selected-action":""}" data-like="${a.id}" ${hasDeviceAction(a.id,"like")?"disabled":""}>${hasDeviceAction(a.id,"like")?"❤️ 추천했어요":"❤️ 추천하기"}</button><button class="ghost" data-feedback="${a.id}">💬 피드백 남기기</button></div>${a.hasManageCode?`<div class="owner-tools"><button class="ghost manage-work-btn" data-manage="${a.id}">🔑 작품 관리</button></div>`:""}
+    <div class="detail-actions"><button class="primary" data-launch="${a.id}">▶ 웹앱 실행하기</button><button class="secondary ${hasDeviceAction(a.id,"like")?"selected-action":""}" data-like="${a.id}">${hasDeviceAction(a.id,"like")?"❤️ 추천 취소":"❤️ 추천하기"}</button><button class="ghost" data-feedback="${a.id}">💬 피드백 남기기</button></div>${a.hasManageCode?`<div class="owner-tools"><button class="ghost manage-work-btn" data-manage="${a.id}">🔑 작품 관리</button></div>`:""}
     <div class="content-block"><h4>👤 제작자</h4><p>${escapeHTML(a.grade)} · ${escapeHTML(a.author)}</p></div>
     <div class="content-block"><h4>💭 왜 만들었나요?</h4><p>${escapeHTML(a.story)}</p></div>
     <div class="content-block"><h4>🤖 AI를 어떻게 활용했나요?</h4><p>${escapeHTML(a.aiUse)}</p></div>
     <div class="content-block">
       <h4>작품 응원하기</h4>
-      <p class="reaction-guide">한 작품에는 이 기기에서 추천 1회, 응원 반응 1가지만 남길 수 있어요.</p>
+      <p class="reaction-guide">한 작품에는 추천 1개와 응원 반응 1가지만 선택할 수 있어요. 선택한 항목을 다시 누르면 취소할 수 있습니다.</p>
       <div class="reactions">${(()=>{
         const chosen=selectedReaction(a.id);
         return Object.entries(a.reactions||{}).map(([k,v])=>{
           const selected=chosen===k;
-          return `<button class="react-btn ${selected?"selected-action":""}" data-react="${a.id}" data-react-name="${k}" ${chosen?"disabled":""}>${k==="재미있어요"?"😆":k==="아이디어 좋아요"?"💡":"📚"} ${k} ${v}${selected?" · 선택됨":""}</button>`;
+          return `<button class="react-btn ${selected?"selected-action":""}" data-react="${a.id}" data-react-name="${k}" ${(chosen && !selected)?"disabled":""}>${k==="재미있어요"?"😆":k==="아이디어 좋아요"?"💡":"📚"} ${k} ${v}${selected?" · 취소 가능":""}</button>`;
         }).join("");
       })()}</div>
     </div>
@@ -601,39 +611,51 @@ function bindDynamic(){
   });
   document.querySelectorAll("[data-like]").forEach(b=>b.onclick=async()=>{
     const id=b.dataset.like;
-    if(hasDeviceAction(id,"like")){
-      toast("이 기기에서는 이미 추천했습니다.");
-      return;
-    }
+    const selected=hasDeviceAction(id,"like");
     try{
       await firestoreDb.collection("apps").doc(id).update({
-        likes:firebase.firestore.FieldValue.increment(1)
+        likes:firebase.firestore.FieldValue.increment(selected?-1:1)
       });
-      markDeviceAction(id,"like");
-      toast("추천을 남겼습니다.");
+      if(selected){
+        unmarkDeviceAction(id,"like");
+        toast("추천을 취소했습니다.");
+      }else{
+        markDeviceAction(id,"like");
+        toast("추천을 남겼습니다.");
+      }
       render();
     }catch(error){
       console.error(error);
-      toast("추천을 저장하지 못했습니다.");
+      toast(selected?"추천 취소에 실패했습니다.":"추천을 저장하지 못했습니다.");
     }
   });
   document.querySelectorAll("[data-react]").forEach(b=>b.onclick=async()=>{
     const id=b.dataset.react;
     const name=b.dataset.reactName;
-    if(selectedReaction(id)){
-      toast("이 작품에는 한 가지 응원 반응만 선택할 수 있습니다.");
+    const chosen=selectedReaction(id);
+
+    // 이미 다른 반응을 선택한 경우 먼저 기존 반응을 취소하도록 안내
+    if(chosen && chosen!==name){
+      toast("현재 선택한 응원 반응을 먼저 취소해 주세요.");
       return;
     }
+
+    const selected=chosen===name;
     try{
       await firestoreDb.collection("apps").doc(id).update({
-        [`reactions.${name}`]:firebase.firestore.FieldValue.increment(1)
+        [`reactions.${name}`]:firebase.firestore.FieldValue.increment(selected?-1:1)
       });
-      markDeviceAction(id,`reaction:${name}`);
-      toast("응원 반응을 남겼습니다.");
+      if(selected){
+        unmarkDeviceAction(id,`reaction:${name}`);
+        toast("응원 반응을 취소했습니다.");
+      }else{
+        markDeviceAction(id,`reaction:${name}`);
+        toast("응원 반응을 남겼습니다.");
+      }
       render();
     }catch(error){
       console.error(error);
-      toast("반응을 저장하지 못했습니다.");
+      toast(selected?"응원 반응 취소에 실패했습니다.":"반응을 저장하지 못했습니다.");
     }
   });
   document.querySelectorAll("[data-feedback]").forEach(b=>b.onclick=()=>{document.querySelector("#feedbackAppId").value=b.dataset.feedback;document.querySelector("#feedbackDialog").showModal();});
@@ -673,6 +695,41 @@ function bindDynamic(){
       toast("건의사항 삭제에 실패했습니다.");
     }
   });
+
+  const resetEngagementLogs=document.querySelector("#resetEngagementLogs");
+  if(resetEngagementLogs) resetEngagementLogs.onclick=async()=>{
+    if(!isAdmin()) return;
+    const ok=confirm("모든 작품의 추천 수와 응원 반응 수를 0으로 초기화할까요? 이 작업은 되돌릴 수 없습니다.");
+    if(!ok) return;
+
+    try{
+      const snapshot=await firestoreDb.collection("apps").get();
+      let batch=firestoreDb.batch();
+      let count=0;
+      for(const doc of snapshot.docs){
+        batch.update(doc.ref,{
+          likes:0,
+          reactions:{
+            "재미있어요":0,
+            "아이디어 좋아요":0,
+            "배움이 있어요":0
+          }
+        });
+        count++;
+        if(count%400===0){
+          await batch.commit();
+          batch=firestoreDb.batch();
+        }
+      }
+      if(count%400!==0) await batch.commit();
+      localStorage.removeItem(DEVICE_ACTION_KEY);
+      toast("추천·응원 기록을 초기화했습니다.");
+      render();
+    }catch(error){
+      console.error(error);
+      toast("기록 초기화에 실패했습니다.");
+    }
+  };
 
 }
 function filterGallery(){

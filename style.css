@@ -600,3 +600,16 @@ button[disabled].selected-action{
 .detail-actions button[disabled]{
   cursor:default;
 }
+
+
+/* ===== 추천·응원 선택 취소 ===== */
+.selected-action{
+  box-shadow:0 0 0 2px rgba(91,91,214,.08) inset;
+}
+.selected-action:hover{
+  background:#e4e7ff!important;
+  border-color:#bfc5ff!important;
+}
+.react-btn.selected-action{
+  cursor:pointer!important;
+}
