@@ -290,7 +290,7 @@ function setRoute(route, options={}){
 function appCard(app, options={}){
   return `<article class="app-card" data-open="${app.id}">
     <div class="thumb">
-      ${app.image?`<img src="${escapeHTML(app.image)}" alt="${escapeHTML(app.title)} 대표 이미지">`:`<div class="thumb-emoji">${app.emoji||categoryEmoji(app.category)}</div>`}
+      ${app.image?`<div class="cover-art"><img class="cover-art-blur" src="${escapeHTML(app.image)}" alt="" aria-hidden="true"><img class="cover-art-main" src="${escapeHTML(app.image)}" alt="${escapeHTML(app.title)} 대표 이미지"></div>`:`<div class="thumb-emoji">${app.emoji||categoryEmoji(app.category)}</div>`}
       ${isNew(app)?`<span class="badge new">NEW</span>`:""}
       ${options.popular?`<span class="popular-badge">👑 인기</span>`:""}
     </div>
@@ -442,7 +442,7 @@ function renderDetail(){
   const a=state.apps.find(x=>x.id===detailId); if(!a) return `<div class="empty"><div class="emoji">🔎</div>작품을 찾을 수 없습니다.</div>`;
   const rank=[...approvedApps()].sort((x,y)=>score(y)-score(x)).findIndex(x=>x.id===a.id);
   return `<button class="ghost" data-back="1" style="margin-bottom:16px">← 돌아가기</button><div class="panel detail">
-    <div class="detail-hero">${a.image?`<img src="${escapeHTML(a.image)}" alt="${escapeHTML(a.title)} 대표 이미지">`:a.emoji||categoryEmoji(a.category)}</div>
+    <div class="detail-hero">${a.image?`<div class="cover-art"><img class="cover-art-blur" src="${escapeHTML(a.image)}" alt="" aria-hidden="true"><img class="cover-art-main" src="${escapeHTML(a.image)}" alt="${escapeHTML(a.title)} 대표 이미지"></div>`:a.emoji||categoryEmoji(a.category)}</div>
     <div><div class="detail-tags"><span class="tag">${escapeHTML(a.category)}</span><span class="tag">${escapeHTML(a.grade)}</span>${isNew(a)?`<span class="tag">NEW</span>`:""}${rank>=0&&rank<4?`<span class="tag">👑 인기작</span>`:""}${!a.approved?`<span class="tag">승인 대기</span>`:""}</div>
     <h2>${escapeHTML(a.title)}</h2><p style="color:#6b7280">${escapeHTML(a.description)}</p><div class="detail-stats"><span>👀 ${a.views||0}</span><span>❤️ ${a.likes||0}</span><span>💬 ${a.feedback?.length||0}</span></div>
     <div class="detail-actions"><button class="primary" data-launch="${a.id}">▶ 웹앱 실행하기</button><button class="secondary ${hasDeviceAction(a.id,"like")?"selected-action":""}" data-like="${a.id}">${hasDeviceAction(a.id,"like")?"❤️ 추천 취소":"❤️ 추천하기"}</button><button class="ghost" data-feedback="${a.id}">💬 피드백 남기기</button></div>${a.hasManageCode?`<div class="owner-tools"><button class="ghost manage-work-btn" data-manage="${a.id}">🔑 작품 관리</button></div>`:""}

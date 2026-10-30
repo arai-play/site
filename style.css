@@ -613,3 +613,10 @@ button[disabled].selected-action{
 .react-btn.selected-action{
   cursor:pointer!important;
 }
+
+/* 대표 이미지: 원본 비율 유지 + 흐린 동일 이미지로 여백 채움 */
+.thumb .cover-art, .detail-hero .cover-art { position:absolute; inset:0; overflow:hidden; isolation:isolate; background:#edf0ff; }
+.thumb .cover-art-blur, .detail-hero .cover-art-blur { position:absolute; inset:-20px; width:calc(100% + 40px); height:calc(100% + 40px); object-fit:cover; filter:blur(18px) brightness(.92); opacity:.75; pointer-events:none; }
+.thumb .cover-art-main, .detail-hero .cover-art-main { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; object-position:center; z-index:1; }
+.detail-hero {position:relative; min-height:320px; aspect-ratio: 4 / 3;}
+.thumb .badge, .thumb .popular-badge {z-index:3;}
