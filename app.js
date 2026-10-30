@@ -335,7 +335,7 @@ function renderRanking(){
 function renderSubmit(){
   const edit=editingId?state.apps.find(a=>a.id===editingId):null;
   const v=(name)=>edit?escapeHTML(edit[name]||""):"";
-  return `${sectionHeader(edit?"✏️ 작품 수정":"＋ 작품 등록",edit?"수정 후 저장하면 기존 작품에 반영됩니다.":"등록한 작품은 교사가 확인한 뒤 공개됩니다.")}
+  return `${sectionHeader(edit?"✏️ 작품 수정":"＋ 작품 등록",edit?(isAdmin()?"관리자는 관리 코드 없이 작품 정보를 수정할 수 있습니다.":"수정 후 저장하면 기존 작품에 반영됩니다."):"등록한 작품은 교사가 확인한 뒤 공개됩니다.")}
   <div class="panel"><form id="submitForm" class="form-grid">
     <label>작품 이름<input name="title" maxlength="40" required value="${v("title")}" placeholder="예: 우주 수학 대작전"></label>
     <label>카테고리<select name="category" required>${["게임","학습","생활","창작","과학","퀴즈","기타"].map(c=>`<option ${edit?.category===c?"selected":""}>${c}</option>`).join("")}</select></label>
@@ -437,7 +437,7 @@ function renderAdmin(){
   </div>
   <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">관리자 세션</h3><p class="small">관리자는 Firebase Google 인증으로 보호됩니다. 학생 작품의 수정·삭제는 등록 시 설정한 작품 관리 코드로 인증합니다.</p><button class="ghost" id="adminLogout">교사 관리 로그아웃</button></div>`;
 }
-function adminRow(a,pending){return `<div class="admin-row"><div class="rank-icon">${a.image?`<img src="${escapeHTML(a.image)}" alt="">`:a.emoji||categoryEmoji(a.category)}</div><div><div class="rank-title">${escapeHTML(a.title)}</div><div class="rank-sub">${escapeHTML(a.grade)} · ${escapeHTML(a.author)} · ${escapeHTML(a.category)}</div><div class="small">${escapeHTML(a.description)}</div></div><div class="admin-actions"><button class="secondary" data-preview="${a.id}">${pending?"미리보기":"보기"}</button>${pending?`<button class="primary" data-approve="${a.id}">승인</button>`:`<button class="ghost" data-unpublish="${a.id}">비공개</button>`}<button class="danger" data-admin-delete="${a.id}">삭제</button></div></div>`;}
+function adminRow(a,pending){return `<div class="admin-row"><div class="rank-icon">${a.image?`<img src="${escapeHTML(a.image)}" alt="">`:a.emoji||categoryEmoji(a.category)}</div><div><div class="rank-title">${escapeHTML(a.title)}</div><div class="rank-sub">${escapeHTML(a.grade)} · ${escapeHTML(a.author)} · ${escapeHTML(a.category)}</div><div class="small">${escapeHTML(a.description)}</div></div><div class="admin-actions"><button class="secondary" data-preview="${a.id}">${pending?"미리보기":"보기"}</button><button class="secondary" data-admin-edit="${a.id}">✏️ 수정</button>${pending?`<button class="primary" data-approve="${a.id}">승인</button>`:`<button class="ghost" data-unpublish="${a.id}">비공개</button>`}<button class="danger" data-admin-delete="${a.id}">삭제</button></div></div>`;}
 function renderDetail(){
   const a=state.apps.find(x=>x.id===detailId); if(!a) return `<div class="empty"><div class="emoji">🔎</div>작품을 찾을 수 없습니다.</div>`;
   const rank=[...approvedApps()].sort((x,y)=>score(y)-score(x)).findIndex(x=>x.id===a.id);
@@ -584,6 +584,17 @@ function bindDynamic(){
       await firestoreDb.collection("apps").doc(b.dataset.unpublish).update({approved:false});
       toast("작품을 비공개로 전환했습니다.");
     }catch(error){console.error(error);toast("비공개 처리에 실패했습니다.");}
+  });
+  document.querySelectorAll("[data-admin-edit]").forEach(b=>b.onclick=()=>{
+    if(!isAdmin()){
+      toast("관리자 로그인이 필요합니다.");
+      return;
+    }
+    const target=state.apps.find(a=>a.id===b.dataset.adminEdit);
+    if(!target){ toast("수정할 작품을 찾을 수 없습니다."); return; }
+    verifiedManageAppId=null;
+    editingId=target.id;
+    setRoute("submit");
   });
   document.querySelectorAll("[data-admin-delete]").forEach(b=>b.onclick=async()=>{
     if(!isAdmin() || !confirm("관리자 권한으로 이 작품을 삭제할까요?")) return;
