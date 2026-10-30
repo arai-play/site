@@ -95,6 +95,8 @@ const seedApps = [
 let state = { apps: [], suggestions: [] };
 let appsUnsubscribe = null;
 let suggestionsUnsubscribe = null;
+let categoriesUnsubscribe = null;
+let categoryNames = ["게임","학습","생활","창작","과학","퀴즈","기타"];
 let currentRoute = "home";
 let categoryFilter = "전체";
 let detailId = null;
@@ -304,11 +306,89 @@ function appCard(app, options={}){
 }
 function sectionHeader(title,desc="",route=null){return `<div class="section-head"><div><h3>${title}</h3>${desc?`<p>${desc}</p>`:""}</div>${route?`<button class="link-btn" data-route="${route}">전체보기 →</button>`:""}</div>`;}
 
+
+// Firebase에 저장된 공통 카테고리: 관리자가 변경하면 모든 방문자에게 자동 반영됩니다.
+function startCategoriesListener(){
+  if(categoriesUnsubscribe) categoriesUnsubscribe();
+  categoriesUnsubscribe=firestoreDb.collection("siteSettings").doc("categories")
+    .onSnapshot(doc=>{
+      if(doc.exists && Array.isArray(doc.data().names) && doc.data().names.length){
+        categoryNames=doc.data().names.filter(x=>typeof x==="string" && x.trim());
+      }
+      if(categoryFilter!=="전체" && !categoryNames.includes(categoryFilter)) categoryFilter="전체";
+      render();
+    },error=>{console.error("카테고리 로드 오류",error);toast("카테고리를 불러오지 못했습니다.");});
+}
+function categoryOptions(includeAll=false, current=""){
+  const names=[...categoryNames];
+  if(current && !names.includes(current)) names.push(current); // 기존 작품 호환
+  return includeAll?["전체",...names]:names;
+}
+function categoryManagePanel(){
+  return `<div class="panel" style="margin-top:20px">
+    <h3 style="margin:0 0 8px">🗂️ 카테고리 관리</h3>
+    <p class="small">등록 화면, 탐색 필터, 홈 화면에 바로 반영됩니다. 삭제는 해당 카테고리에 작품이 없을 때만 가능합니다.</p>
+    <div class="cat-admin-list">${categoryNames.map((c,i)=>`<div class="cat-admin-row">
+       <span class="cat-admin-name">${categoryEmoji(c)} ${escapeHTML(c)}</span>
+       <button class="ghost" data-cat-move="${i}" data-cat-dir="-1" ${i===0?"disabled":""} title="위로">↑</button>
+       <button class="ghost" data-cat-move="${i}" data-cat-dir="1" ${i===categoryNames.length-1?"disabled":""} title="아래로">↓</button>
+       <button class="secondary" data-cat-rename="${i}">이름 변경</button>
+       <button class="danger" data-cat-remove="${i}">삭제</button>
+    </div>`).join("")}</div>
+    <form id="addCategoryForm" class="cat-add-form"><input name="newCategory" maxlength="20" placeholder="새 카테고리 이름 (20자 이내)" required><button class="primary" type="submit">＋ 추가</button></form>
+  </div>`;
+}
+async function saveCategories(names){
+  if(!isAdmin()) throw new Error("관리자 권한이 필요합니다.");
+  if(names.length<1 || names.length>30 || new Set(names).size!==names.length || names.some(x=>!x || x.length>20)) throw new Error("카테고리 이름을 확인해 주세요.");
+  await firestoreDb.collection("siteSettings").doc("categories").set({names,updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+}
+async function renameCategory(index){
+  const oldName=categoryNames[index];
+  const next=prompt(`'${oldName}'의 새 이름을 입력하세요.`,oldName)?.trim();
+  if(!next||next===oldName) return;
+  if(categoryNames.includes(next)){toast("이미 존재하는 카테고리입니다.");return;}
+  if(next.length>20){toast("20자 이하로 입력해 주세요.");return;}
+  try{
+    const affected=state.apps.filter(a=>a.category===oldName);
+    if(!confirm(`'${oldName}'을 '${next}'(으)로 변경할까요? 연결된 작품 ${affected.length}개도 함께 변경됩니다.`)) return;
+    // 한 번의 배치로 카테고리와 기존 작품을 일관되게 갱신
+    if(affected.length>450){toast("작품이 450개를 초과합니다. 지원되는 일괄 변경 범위를 초과했습니다.");return;}
+    const batch=firestoreDb.batch();
+    batch.set(firestoreDb.collection("siteSettings").doc("categories"),{names:categoryNames.map((x,i)=>i===index?next:x),updatedAt:firebase.firestore.FieldValue.serverTimestamp()});
+    affected.forEach(a=>batch.update(firestoreDb.collection("apps").doc(a.id),{category:next}));
+    await batch.commit();toast("카테고리 이름을 변경했습니다.");
+  }catch(e){console.error(e);toast("이름 변경에 실패했습니다.");}
+}
+function bindCategoriesAdmin(){
+  const form=document.querySelector("#addCategoryForm");
+  if(form) form.onsubmit=async e=>{
+    e.preventDefault();const next=new FormData(form).get("newCategory").trim();
+    if(categoryNames.includes(next)){toast("이미 존재하는 카테고리입니다.");return;}
+    try{await saveCategories([...categoryNames,next]);toast("카테고리를 추가했습니다.");}catch(err){console.error(err);toast("추가에 실패했습니다.");}
+  };
+  document.querySelectorAll("[data-cat-move]").forEach(b=>b.onclick=async()=>{
+    const i=Number(b.dataset.catMove),j=i+Number(b.dataset.catDir);
+    if(j<0||j>=categoryNames.length)return;
+    const names=[...categoryNames];[names[i],names[j]]=[names[j],names[i]];
+    try{await saveCategories(names);}catch(e){console.error(e);toast("순서를 변경하지 못했습니다.");}
+  });
+  document.querySelectorAll("[data-cat-rename]").forEach(b=>b.onclick=()=>renameCategory(Number(b.dataset.catRename)));
+  document.querySelectorAll("[data-cat-remove]").forEach(b=>b.onclick=async()=>{
+    const i=Number(b.dataset.catRemove), name=categoryNames[i];
+    const used=state.apps.filter(a=>a.category===name).length;
+    if(used){toast(`'${name}' 카테고리에 작품 ${used}개가 있습니다. 먼저 작품의 카테고리를 변경하세요.`);return;}
+    if(categoryNames.length===1){toast("카테고리는 최소 1개가 필요합니다.");return;}
+    if(!confirm(`'${name}' 카테고리를 삭제할까요?`)) return;
+    try{await saveCategories(categoryNames.filter((_,n)=>n!==i));toast("삭제했습니다.");}catch(e){console.error(e);toast("삭제하지 못했습니다.");}
+  });
+}
+
 function renderHome(){
   const apps=approvedApps();
   const popular=[...apps].sort((a,b)=>score(b)-score(a)).slice(0,4);
   const newest=[...apps].sort((a,b)=>b.createdAt.localeCompare(a.createdAt)).slice(0,4);
-  const categories=["게임","학습","생활","창작","과학","퀴즈"];
+  const categories=categoryNames;
   return `<section class="hero"><div><h2>다양한 AI 작품을<br>만나보세요.</h2><p>게임, 학습 도구, 생활 아이디어까지. 작품을 자유롭게 실행하고 좋은 점과 개선 의견을 나눠보세요.</p><div class="hero-actions"><button class="hero-primary" data-route="new">✨ 새 작품 보기</button><button class="hero-secondary" data-route="submit">＋ 작품 등록</button></div></div><div class="hero-art"><div class="hero-device"><div>🎮</div><div>🧠</div><div>🎨</div><div>🚀</div></div></div></section>
   <section class="section">${sectionHeader("🔥 지금 인기 있는 작품","많은 관심을 받고 있는 작품이에요.","popular")}<div class="app-grid">${popular.map(a=>appCard(a,{popular:true})).join("")}</div></section>
   <section class="section">${sectionHeader("✨ 새로 나온 작품","최근 등록된 작품을 가장 먼저 만나보세요.","new")}<div class="app-grid">${newest.map(a=>appCard(a)).join("")}</div></section>
@@ -323,14 +403,14 @@ function renderGallery(type){
   if(type==="popular"){title="🔥 인기작";apps=[...apps].sort((a,b)=>score(b)-score(a));}
   if(categoryFilter!=="전체") apps=apps.filter(a=>a.category===categoryFilter);
   return `${sectionHeader(title,"카테고리와 검색으로 원하는 작품을 찾아보세요.")}
-    <div class="filters">${["전체","게임","학습","생활","창작","과학","퀴즈"].map(c=>`<button class="chip ${categoryFilter===c?"active":""}" data-category="${c}">${categoryEmoji(c)} ${c}</button>`).join("")}</div>
+    <div class="filters">${categoryOptions(true).map(c=>`<button class="chip ${categoryFilter===c?"active":""}" data-category="${c}">${categoryEmoji(c)} ${c}</button>`).join("")}</div>
     <div class="search-row"><input id="searchInput" placeholder="작품 이름, 설명, 제작자 검색"><select id="gradeFilter"><option value="">전체 학년</option><option>1학년</option><option>2학년</option><option>3학년</option><option>4학년</option><option>5학년</option><option>6학년</option></select></div>
     <div id="galleryGrid" class="app-grid">${apps.map(a=>appCard(a,{popular:type==="popular"})).join("")}</div>`;
 }
 function rankRow(a,i){return `<div class="rank-row" data-open="${a.id}" role="button" tabindex="0"><div class="rank-num">${i===0?"🥇":i===1?"🥈":i===2?"🥉":i+1}</div><div class="rank-icon">${a.image?`<img src="${escapeHTML(a.image)}" alt="">`:a.emoji||categoryEmoji(a.category)}</div><div><div class="rank-title">${escapeHTML(a.title)}</div><div class="rank-sub">${escapeHTML(a.grade)} · ${escapeHTML(a.author)} · ${escapeHTML(a.category)}</div></div><div class="rank-score">${score(a)}점</div></div>`;}
 function renderRanking(){
   const apps=[...approvedApps()].filter(a=>categoryFilter==="전체"||a.category===categoryFilter).sort((a,b)=>score(b)-score(a));
-  return `${sectionHeader("🏆 작품 랭킹","인기점수 = 추천×5 + 실행횟수 + 피드백×3")}<div class="filters">${["전체","게임","학습","생활","창작","과학","퀴즈"].map(c=>`<button class="chip ${categoryFilter===c?"active":""}" data-category="${c}">${categoryEmoji(c)} ${c}</button>`).join("")}</div><div class="rank-list">${apps.map((a,i)=>rankRow(a,i)).join("")}</div>`;
+  return `${sectionHeader("🏆 작품 랭킹","인기점수 = 추천×5 + 실행횟수 + 피드백×3")}<div class="filters">${categoryOptions(true).map(c=>`<button class="chip ${categoryFilter===c?"active":""}" data-category="${c}">${categoryEmoji(c)} ${c}</button>`).join("")}</div><div class="rank-list">${apps.map((a,i)=>rankRow(a,i)).join("")}</div>`;
 }
 function renderSubmit(){
   const edit=editingId?state.apps.find(a=>a.id===editingId):null;
@@ -338,7 +418,7 @@ function renderSubmit(){
   return `${sectionHeader(edit?"✏️ 작품 수정":"＋ 작품 등록",edit?(isAdmin()?"관리자는 관리 코드 없이 작품 정보를 수정할 수 있습니다.":"수정 후 저장하면 기존 작품에 반영됩니다."):"등록한 작품은 교사가 확인한 뒤 공개됩니다.")}
   <div class="panel"><form id="submitForm" class="form-grid">
     <label>작품 이름<input name="title" maxlength="40" required value="${v("title")}" placeholder="예: 우주 수학 대작전"></label>
-    <label>카테고리<select name="category" required>${["게임","학습","생활","창작","과학","퀴즈","기타"].map(c=>`<option ${edit?.category===c?"selected":""}>${c}</option>`).join("")}</select></label>
+    <label>카테고리<select name="category" required>${categoryOptions(false,edit?.category).map(c=>`<option ${edit?.category===c?"selected":""}>${c}</option>`).join("")}</select></label>
     <label>학년<select name="grade" required>${[1,2,3,4,5,6].map(n=>`<option ${edit?.grade===n+"학년"?"selected":""}>${n}학년</option>`).join("")}</select></label>
     <label>닉네임<input name="author" maxlength="12" required value="${v("author")}" placeholder="실명 대신 닉네임을 추천해요"></label>
     <label class="full">웹앱 주소<input name="url" type="url" required value="${v("url")}" placeholder="https://..."></label>
@@ -435,6 +515,7 @@ function renderAdmin(){
     <p class="small">기존 작품의 추천 수와 응원 반응 수를 모두 0으로 초기화합니다. 작품·조회수·피드백은 삭제하지 않습니다.</p>
     <button class="danger" id="resetEngagementLogs">추천·응원 기록 전체 초기화</button>
   </div>
+  ${categoryManagePanel()}
   <div class="panel" style="margin-top:20px"><h3 style="margin-top:0">관리자 세션</h3><p class="small">관리자는 Firebase Google 인증으로 보호됩니다. 학생 작품의 수정·삭제는 등록 시 설정한 작품 관리 코드로 인증합니다.</p><button class="ghost" id="adminLogout">교사 관리 로그아웃</button></div>`;
 }
 function adminRow(a,pending){return `<div class="admin-row"><div class="rank-icon">${a.image?`<img src="${escapeHTML(a.image)}" alt="">`:a.emoji||categoryEmoji(a.category)}</div><div><div class="rank-title">${escapeHTML(a.title)}</div><div class="rank-sub">${escapeHTML(a.grade)} · ${escapeHTML(a.author)} · ${escapeHTML(a.category)}</div><div class="small">${escapeHTML(a.description)}</div></div><div class="admin-actions"><button class="secondary" data-preview="${a.id}">${pending?"미리보기":"보기"}</button><button class="secondary" data-admin-edit="${a.id}">✏️ 수정</button>${pending?`<button class="primary" data-approve="${a.id}">승인</button>`:`<button class="ghost" data-unpublish="${a.id}">비공개</button>`}<button class="danger" data-admin-delete="${a.id}">삭제</button></div></div>`;}
@@ -477,6 +558,7 @@ function render(){
 }
 
 function bindDynamic(){
+  bindCategoriesAdmin();
   document.querySelectorAll("[data-route]").forEach(el=>el.onclick=()=>{categoryFilter="전체"; if(el.dataset.route!=="submit") editingId=null; setRoute(el.dataset.route);});
   document.querySelectorAll("[data-open]").forEach(el=>el.onclick=()=>setRoute("detail",{detailId:el.dataset.open}));
   document.querySelectorAll("[data-category-link]").forEach(el=>el.onclick=()=>{categoryFilter=el.dataset.categoryLink;setRoute("popular");});
@@ -917,6 +999,7 @@ firebaseAuth.onAuthStateChanged(async user=>{
   }
   startAppsListener();
   startSuggestionsListener();
+  startCategoriesListener();
 });
 
 document.querySelector(".brand").onclick=()=>setRoute("home");
